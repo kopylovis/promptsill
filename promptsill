@@ -1,0 +1,787 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+from urllib.parse import quote
+
+VERSION = "0.1.0"
+HOME = os.path.expanduser("~")
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "promptsill")
+CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "promptsill")
+CONFIG = os.path.join(CONFIG_DIR, "config.json")
+PREVIOUS = os.path.join(CONFIG_DIR, "previous-statusline.json")
+GB = 1073741824
+MB = 1048576
+DIM, YELLOW, RED, GREEN, CYAN = "2", "33", "31", "32", "36"
+WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
+OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
+
+TEXT = {
+    "en": {
+        "context": "context", "five_hour": "5h", "seven_day": "week", "resets": "resets {when}",
+        "runs_out": "runs out {when}", "in_min": "in {n} min", "at": "at {hm}",
+        "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "cache_left": "cache {left}", "cache_gone": "cache expired",
+        "s": "{n}s", "m": "{n}m", "h": "{n}h",
+        "not_pushed": "not pushed", "busy": ":{port} taken: {owner}",
+        "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
+        "memory": "memory {used}/{total} GB", "swap": "swap {size}", "gradle": "Gradle {n} ({size})",
+        "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
+        "GB": "GB", "MB": "MB",
+    },
+    "ru": {
+        "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
+        "runs_out": "кончится {when}", "in_min": "через {n} мин", "at": "в {hm}",
+        "days": ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
+        "cache_left": "кэш {left}", "cache_gone": "кэш истёк",
+        "s": "{n} с", "m": "{n} мин", "h": "{n} ч",
+        "not_pushed": "не запушена", "busy": ":{port} занят: {owner}",
+        "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
+        "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "gradle": "Gradle {n} ({size})",
+        "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
+        "GB": "ГБ", "MB": "МБ",
+    },
+}
+
+
+def t(key, **kw):
+    value = TEXT[OPTS["lang"]][key]
+    return value.format(**kw) if kw else value
+
+
+def color(text, code):
+    return f"\033[{code}m{text}\033[0m" if code and OPTS["color"] else text
+
+
+def link(text, url):
+    return f"\033]8;;{url}\a{text}\033]8;;\a" if url and OPTS["links"] else text
+
+
+def level(value, warn, bad):
+    return RED if value >= bad else YELLOW if value >= warn else ""
+
+
+def run(cmd, timeout=2, cwd=None):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def read_text(path, limit=200000):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read(limit)
+    except OSError:
+        return ""
+
+
+def write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def cache_path(name):
+    return os.path.join(CACHE, re.sub(r"[^\w.-]", "_", name)[-120:] + ".json")
+
+
+def cached(name, ttl, fn):
+    path = cache_path(name)
+    try:
+        if time.time() - os.path.getmtime(path) < ttl:
+            with open(path) as f:
+                return json.load(f)
+    except (OSError, ValueError):
+        pass
+    value = fn()
+    try:
+        write_json(path, value)
+    except OSError:
+        pass
+    return value
+
+
+def env_lang():
+    for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(name)
+        if value:
+            return value
+    return ""
+
+
+def configure(lang=None):
+    conf = read_json(CONFIG)
+    chosen = (lang or os.environ.get("PROMPTSILL_LANG") or conf.get("lang") or env_lang() or "en").lower()
+    OPTS["lang"] = "ru" if chosen.startswith("ru") else "en"
+    OPTS["ascii"] = bool(conf.get("ascii")) or os.environ.get("PROMPTSILL_ASCII", "") not in ("", "0")
+    OPTS["color"] = not os.environ.get("NO_COLOR") and conf.get("color", True) is not False
+    OPTS["links"] = conf.get("links", True) is not False
+
+
+def memory():
+    if sys.platform != "darwin":
+        return {}
+    vm = run(["vm_stat"])
+    page = re.search(r"page size of (\d+)", vm)
+    page = int(page.group(1)) if page else 16384
+
+    def pages(name):
+        m = re.search(r"^" + re.escape(name) + r":\s+(\d+)", vm, re.M)
+        return int(m.group(1)) if m else 0
+
+    sysctl = run(["sysctl", "-n", "hw.memsize", "vm.swapusage"]).splitlines()
+    total = int(sysctl[0]) if sysctl and sysctl[0].isdigit() else 0
+    swap = re.search(r"used = ([\d.]+)M", sysctl[1] if len(sysctl) > 1 else "")
+    used = (pages("Anonymous pages") - pages("Pages purgeable") + pages("Pages wired down")
+            + pages("Pages occupied by compressor")) * page
+    return {"total": total, "used": used, "swap": float(swap.group(1)) * MB if swap else 0}
+
+
+def processes():
+    daemons = daemon_mem = sims = 0
+    emulator = False
+    for line in run(["ps", "-A", "-o", "rss=,command="]).splitlines():
+        rss, _, cmd = line.strip().partition(" ")
+        if re.search(r"GradleDaemon|KotlinCompileDaemon|kotlin-daemon", cmd):
+            daemons += 1
+            daemon_mem += int(rss) * 1024 if rss.isdigit() else 0
+        elif "launchd_sim" in cmd:
+            sims += 1
+        elif re.search(r"/qemu-system-\w+", cmd):
+            emulator = True
+    return {"daemons": daemons, "daemon_mem": daemon_mem, "sims": sims, "emulator": emulator}
+
+
+def machine():
+    return {**memory(), **processes()}
+
+
+def git(cwd):
+    out = run(["git", "-C", cwd, "status", "--porcelain=v2", "--branch"], timeout=3)
+    if not out:
+        return None
+    info = {"branch": None, "ahead": 0, "behind": 0, "upstream": False, "changed": 0}
+    for line in out.splitlines():
+        if line.startswith("# branch.head "):
+            info["branch"] = line.split(" ", 2)[2]
+        elif line.startswith("# branch.upstream "):
+            info["upstream"] = True
+        elif line.startswith("# branch.ab "):
+            m = re.match(r"# branch\.ab \+(\d+) -(\d+)", line)
+            if m:
+                info["ahead"], info["behind"] = int(m.group(1)), int(m.group(2))
+        elif line and not line.startswith("#"):
+            info["changed"] += 1
+    return info
+
+
+def web_url(remote):
+    remote = (remote or "").strip()
+    m = re.match(r"^(https?)://(?:[^@/]*@)?([^/]+)/(.+?)(?:\.git)?/?$", remote)
+    if m:
+        return f"{m.group(1)}://{m.group(2)}/{m.group(3)}"
+    m = (re.match(r"^(?:ssh|git)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.+?)(?:\.git)?/?$", remote)
+         or re.match(r"^(?:[^@/]+@)?([^/:]+):(?!/)(.+?)(?:\.git)?/?$", remote))
+    return f"https://{m.group(1)}/{m.group(2)}" if m else None
+
+
+def branch_url(repo, branch, pushed):
+    if not repo or not pushed:
+        return repo
+    host = repo.split("/")[2]
+    path = "/-/tree/" if "gitlab" in host else "/branch/" if "bitbucket" in host else "/tree/" if "github" in host else ""
+    return repo + path + quote(branch, safe="/") if path else repo
+
+
+DEV_PORTS = [("next", 3000), ("nuxt", 3000), ("astro", 4321), ("@angular/core", 4200), ("react-scripts", 3000),
+             ("gatsby", 8000), ("@remix-run/dev", 3000), ("expo", 8081), ("react-native", 8081),
+             ("@react-router/dev", 5173), ("vite", 5173), ("webpack-dev-server", 8080)]
+SERVER_NAMES = ["vite", "next", "nuxt", "astro", "ng", "react-scripts", "react-router", "remix", "gatsby", "webpack",
+                "expo", "metro", "storybook", "wrangler", "vercel", "netlify", "parcel", "esbuild", "bun", "deno"]
+WEB_DIRS = ["", "web", "frontend", "client", "site", "app"]
+
+
+def project(cwd):
+    root = run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], timeout=2).strip() or cwd
+    kinds, ports, node_dir = set(), [], None
+    try:
+        names = set(os.listdir(root))
+    except OSError:
+        names = set()
+    gradle = " ".join(read_text(os.path.join(root, n)) for n in
+                      ("settings.gradle.kts", "settings.gradle", "build.gradle.kts", "build.gradle",
+                       "gradle/libs.versions.toml") if os.path.exists(os.path.join(root, n)))
+    if gradle:
+        kinds.add("mobile" if re.search(r"com\.android|androidApplication|android\s*\{|kotlin\.multiplatform", gradle)
+                  else "jvm")
+    if "pubspec.yaml" in names or "iosApp" in names or any(n.endswith((".xcodeproj", ".xcworkspace")) for n in names):
+        kinds.add("mobile")
+    for sub in WEB_DIRS:
+        pkg_path = os.path.join(root, sub, "package.json")
+        if not os.path.isfile(pkg_path):
+            continue
+        pkg = read_json(pkg_path)
+        deps = {**(pkg.get("dependencies") or {}), **(pkg.get("devDependencies") or {})}
+        if not deps and not pkg.get("scripts"):
+            continue
+        kinds.add("web")
+        node_dir = node_dir or os.path.join(root, sub)
+        if "react-native" in deps or "expo" in deps:
+            kinds.add("mobile")
+        scripts = " ".join(str(v) for k, v in (pkg.get("scripts") or {}).items() if k in ("dev", "start", "serve"))
+        m = re.search(r"(?:--port[ =]|-p\s+|PORT=)(\d{2,5})", scripts)
+        if m:
+            ports.append(int(m.group(1)))
+        else:
+            ports += [port for dep, port in DEV_PORTS if dep in deps][:1]
+    repo = web_url(run(["git", "-C", root, "remote", "get-url", "origin"], timeout=2))
+    return {"root": root, "kinds": sorted(kinds), "ports": sorted(set(ports)), "node_dir": node_dir, "repo": repo}
+
+
+def listeners():
+    out, pid, found = run(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pn"], timeout=3), None, {}
+    for line in out.splitlines():
+        if line.startswith("p"):
+            pid = line[1:]
+        elif line.startswith("n") and pid:
+            m = re.search(r":(\d+)$", line)
+            if m:
+                found.setdefault(pid, set()).add(int(m.group(1)))
+    if not found:
+        return []
+    cwds, cur = {}, None
+    for line in run(["lsof", "-a", "-d", "cwd", "-p", ",".join(found), "-Fn"], timeout=3).splitlines():
+        if line.startswith("p"):
+            cur = line[1:]
+        elif line.startswith("n") and cur:
+            cwds[cur] = line[1:]
+    cmds = {}
+    for line in run(["ps", "-o", "pid=,command=", "-p", ",".join(found)]).splitlines():
+        pid, _, cmd = line.strip().partition(" ")
+        cmds[pid] = cmd
+    return [{"pid": pid, "ports": sorted(ports), "cwd": cwds.get(pid, ""), "name": server_name(cmds.get(pid, ""))}
+            for pid, ports in found.items()]
+
+
+def server_name(cmd):
+    low = cmd.lower()
+    for name in SERVER_NAMES:
+        if re.search(r"(^|[/\s@])" + re.escape(name) + r"([/\s.-]|$)", low):
+            return name
+    return os.path.basename(cmd.split(" ")[0]) if cmd else "?"
+
+
+def node_check(node_dir):
+    want, source = None, None
+    for name in (".nvmrc", ".node-version"):
+        text = read_text(os.path.join(node_dir, name)).strip()
+        m = re.match(r"^v?(\d+)", text)
+        if m:
+            want, source = ("=", int(m.group(1))), name
+            break
+    if not want:
+        engines = str((read_json(os.path.join(node_dir, "package.json")).get("engines") or {}).get("node") or "")
+        m = re.search(r"(>=|\^|~)?\s*v?(\d+)", engines)
+        if m:
+            want, source = (">=" if m.group(1) == ">=" else "=", int(m.group(2))), "engines"
+    if not want:
+        return None
+    need = f"{'≥' if want[0] == '>=' else ''}{want[1]}"
+    m = re.match(r"v(\d+)", run(["node", "--version"]).strip())
+    if not m:
+        return {"key": "no_node", "need": need, "source": source}
+    have = int(m.group(1))
+    if have >= want[1] if want[0] == ">=" else have == want[1]:
+        return None
+    return {"key": "node", "have": have, "need": need, "source": source}
+
+
+def session_size(path):
+    try:
+        total = os.path.getsize(path)
+    except OSError:
+        return 0
+    extra = path[:-6] if path.endswith(".jsonl") else ""
+    if extra and os.path.isdir(extra):
+        for root, _, files in os.walk(extra):
+            for f in files:
+                try:
+                    total += os.lstat(os.path.join(root, f)).st_size
+                except OSError:
+                    pass
+    return total
+
+
+def gb(n):
+    return f"{n / GB:.1f}"
+
+
+def size(n):
+    return f"{n / GB:.1f} {t('GB')}" if n >= GB else f"{n / MB:.0f} {t('MB')}"
+
+
+def span(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return t("s", n=seconds)
+    if seconds < 3600:
+        return t("m", n=seconds // 60)
+    return t("h", n=seconds // 3600)
+
+
+def until(ts, now=None):
+    now = time.time() if now is None else now
+    left = ts - now
+    if left <= 0:
+        return ""
+    at = time.localtime(ts)
+    if left < 3600:
+        return t("in_min", n=max(1, int(left // 60)))
+    if time.strftime("%Y%m%d", at) == time.strftime("%Y%m%d", time.localtime(now)):
+        return t("at", hm=time.strftime("%H:%M", at))
+    return f"{t('days')[at.tm_wday]} {time.strftime('%H:%M', at)}"
+
+
+EIGHTHS = " ▏▎▍▌▋▊▉"
+TRACK = "48;5;240"
+
+
+def bar(pct, code="", width=5):
+    pct = max(0.0, min(100.0, float(pct)))
+    if OPTS["ascii"]:
+        n = int(round(pct / 100 * width))
+        return "[" + color("#" * n, code) + color("-" * (width - n), DIM) + "]"
+    full, part = divmod(int(round(pct / 100 * width * 8)), 8)
+    filled = "█" * full + (EIGHTHS[part] if part else "")
+    if not OPTS["color"]:
+        return filled + "░" * (width - len(filled))
+    return f"\033[{code + ';' if code else ''}{TRACK}m{filled}{' ' * (width - len(filled))}\033[0m"
+
+
+def pace(lim, window, now):
+    pct = lim.get("used_percentage")
+    try:
+        reset = float(lim.get("resets_at"))
+    except (TypeError, ValueError):
+        return None
+    left = reset - now
+    if not isinstance(pct, (int, float)) or not 0 < left <= window:
+        return None
+    elapsed = 1 - left / window
+    if elapsed < 0.1 and pct < 25:
+        return None
+    runs_out = None
+    if pct > 0 and pct > elapsed * 100:
+        runs_out = now + (100 - pct) * window * elapsed / pct
+    return {"ahead": pct - elapsed * 100, "runs_out": runs_out, "reset": reset}
+
+
+def pace_level(pct, p):
+    if not p:
+        return level(pct, 70, 90)
+    if p["runs_out"] and (p["ahead"] >= 25 or pct >= 90):
+        return RED
+    if p["runs_out"] and p["ahead"] >= 10:
+        return YELLOW
+    return ""
+
+
+def limit_part(key, lim, now):
+    pct = lim.get("used_percentage")
+    if not isinstance(pct, (int, float)):
+        return None
+    p = pace(lim, WINDOWS[key], now)
+    code = pace_level(pct, p)
+    label = color(t(key), code)
+    number = color(f"{pct:.0f}%" + (f" +{p['ahead']:.0f}%" if p and code else ""), code)
+    head = f"{label} {bar(pct, code)} {number}" if key == "five_hour" else f"{label} {number}"
+    extra = []
+    if p and code and p["runs_out"]:
+        extra.append(t("runs_out", when=until(p["runs_out"], now)))
+    try:
+        when = until(float(lim.get("resets_at")), now)
+    except (TypeError, ValueError):
+        when = ""
+    if when and (key == "five_hour" or pct >= 50 or code):
+        extra.append(t("resets", when=when))
+    text = head + color("".join(", " + e for e in extra), code)
+    prio = 1 if key == "five_hour" or code else 3
+    return (prio, text, f"{label} {number}")
+
+
+def cache_part(cache, now):
+    if not isinstance(cache, dict) or not cache.get("caching_observed"):
+        return None
+    ttl = 3600 if cache.get("ttl") == "1h" else 300
+    expires = cache.get("expires_at")
+    if cache.get("warm") and isinstance(expires, (int, float)):
+        left = expires - now
+        if 0 < left <= max(60, ttl // 10):
+            return (2, color(t("cache_left", left=span(left)), YELLOW))
+        if left > 0:
+            return None
+    if cache.get("requests"):
+        return (4, color(t("cache_gone"), DIM))
+    return None
+
+
+def claude_line(d, now=None):
+    now = time.time() if now is None else now
+    parts = []
+    model = (d.get("model") or {}).get("display_name")
+    if model:
+        parts.append((4, color(model, CYAN)))
+    ctx = (d.get("context_window") or {}).get("used_percentage")
+    if isinstance(ctx, (int, float)):
+        code = level(ctx, 60, 80)
+        label = color(t("context"), code)
+        number = color(f"{ctx:.0f}%", code)
+        parts.append((1, f"{label} {bar(ctx, code)} {number}", f"{label} {number}"))
+    limits = d.get("rate_limits") or {}
+    for key in ("five_hour", "seven_day"):
+        part = limit_part(key, limits.get(key) or {}, now)
+        if part:
+            parts.append(part)
+    part = cache_part(d.get("prompt_cache"), now)
+    if part:
+        parts.append(part)
+    return parts
+
+
+def dev_parts(proj):
+    parts = []
+    root = proj["root"]
+    servers = cached("listeners", 5, listeners)
+    mine = [s for s in servers if s["cwd"] == root or s["cwd"].startswith(root.rstrip("/") + "/")]
+    for s in mine:
+        text = f"{s['name']} :{','.join(map(str, s['ports'][:2]))}"
+        parts.append((1, color(link(text, f"http://localhost:{s['ports'][0]}"), GREEN)))
+    busy = {p for s in mine for p in s["ports"]}
+    for port in proj["ports"]:
+        if port in busy:
+            continue
+        other = next((s for s in servers if port in s["ports"]), None)
+        if other:
+            owner = os.path.basename(other["cwd"].rstrip("/")) if other["cwd"] not in ("", "/") else other["name"]
+            parts.append((1, color(t("busy", port=port, owner=owner), YELLOW)))
+    return parts
+
+
+def repo_url(d, proj):
+    repo = (d.get("workspace") or {}).get("repo") or {}
+    if repo.get("host") and repo.get("owner") and repo.get("name"):
+        return f"https://{repo['host']}/{repo['owner']}/{repo['name']}"
+    return proj.get("repo")
+
+
+def branch_part(g, proj, d):
+    text = g["branch"]
+    if g["ahead"]:
+        text += f" ↑{g['ahead']}"
+    if g["behind"]:
+        text += f" ↓{g['behind']}"
+    if not g["upstream"] and g["branch"] != "(detached)":
+        text += f" ({t('not_pushed')})"
+    if g["changed"]:
+        text += f" ±{g['changed']}"
+    url = (d.get("pr") or {}).get("url")
+    if not url and g["branch"] != "(detached)":
+        url = branch_url(repo_url(d, proj), g["branch"], g["upstream"])
+    return (1, color(link(text, url), YELLOW if g["ahead"] >= 5 or g["changed"] >= 20 else GREEN))
+
+
+def work_line(d):
+    parts = []
+    cwd = (d.get("workspace") or {}).get("current_dir") or d.get("cwd") or os.getcwd()
+    proj = cached("project-" + cwd, 30, lambda: project(cwd))
+    kinds = set(proj["kinds"])
+    g = cached("git-" + cwd, 3, lambda: git(cwd))
+    if g and g.get("branch"):
+        parts.append(branch_part(g, proj, d))
+    if "web" in kinds:
+        parts += dev_parts(proj)
+        if proj.get("node_dir"):
+            nc = cached("node-" + proj["node_dir"], 60, lambda: node_check(proj["node_dir"]))
+            if nc:
+                parts.append((1, color(t(nc["key"], **{k: v for k, v in nc.items() if k != "key"}), YELLOW)))
+    m = cached("machine", 5, machine)
+    tight = False
+    if m.get("total"):
+        free = m["total"] - m["used"]
+        code = RED if free < GB or m["swap"] > 6 * GB else YELLOW if free < 2 * GB or m["swap"] > 3 * GB else ""
+        tight = bool(code)
+        parts.append((2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code)))
+        if m["swap"] >= 0.5 * GB:
+            parts.append((2 if code else 5, color(t("swap", size=gb(m["swap"])), code)))
+    builds = kinds & {"mobile", "jvm"}
+    if m.get("daemons") and (builds or tight or m["daemon_mem"] >= 1.5 * GB):
+        heavy = m["daemon_mem"] >= 1.5 * GB
+        parts.append((2 if heavy else 3, color(t("gradle", n=m["daemons"], size=size(m["daemon_mem"])),
+                                               YELLOW if heavy else "")))
+    if "mobile" in kinds or tight:
+        if m.get("sims"):
+            parts.append((3, t("sims", n=m["sims"])))
+        if m.get("emulator"):
+            parts.append((3, t("emulator")))
+    path = d.get("transcript_path")
+    if path:
+        sid = d.get("session_id") or os.path.basename(path)
+        n = cached("size-" + sid, 30, lambda: session_size(path))
+        if n >= 50 * MB:
+            code = level(n, 150 * MB, 400 * MB)
+            parts.append((3 if code == RED else 5, color(t("session", size=size(n)), code)))
+    return parts
+
+
+ESCAPES = re.compile(r"\033\[[0-9;]*m|\033\]8;;[^\a\033]*(?:\a|\033\\)")
+SEP = " · "
+
+
+def visible(text):
+    return len(ESCAPES.sub("", text))
+
+
+def fit(parts, cols):
+    parts = [(p[0], p[1], p[2] if len(p) > 2 else None) for p in parts]
+    width = lambda ps: sum(visible(p[1]) for p in ps) + len(SEP) * max(0, len(ps) - 1)
+    limit = cols - 4 if cols else 0
+    if limit:
+        for i in sorted(range(len(parts)), key=lambda i: (-parts[i][0], -i)):
+            if width(parts) <= limit:
+                break
+            if parts[i][2] is not None:
+                parts[i] = (parts[i][0], parts[i][2], None)
+        while len(parts) > 1 and width(parts) > limit:
+            worst = max(p[0] for p in parts)
+            if worst <= 1:
+                break
+            parts.pop(max(i for i, p in enumerate(parts) if p[0] == worst))
+    return color(SEP, DIM).join(p[1] for p in parts)
+
+
+def columns():
+    try:
+        return int(os.environ.get("COLUMNS") or 0)
+    except ValueError:
+        return 0
+
+
+def render(d, cols=0):
+    lines = [fit(parts, cols) for parts in (claude_line(d), work_line(d))]
+    return "\n".join(line for line in lines if line)
+
+
+def sample(cwd):
+    now = time.time()
+    return {"model": {"display_name": "Opus"}, "workspace": {"current_dir": cwd},
+            "context_window": {"used_percentage": 42},
+            "prompt_cache": {"caching_observed": True, "warm": True, "ttl": "5m", "expires_at": int(now + 45),
+                             "requests": 12},
+            "rate_limits": {"five_hour": {"used_percentage": 63, "resets_at": int(now + 3 * 3600)},
+                            "seven_day": {"used_percentage": 35, "resets_at": int(now + 4 * 86400)}}}
+
+
+def tilde(path):
+    return "~" + path[len(HOME):] if path == HOME or path.startswith(HOME + os.sep) else path
+
+
+def settings_path(opts):
+    if opts.get("settings"):
+        return os.path.abspath(os.path.expanduser(opts["settings"]))
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude")
+    return os.path.join(os.path.expanduser(base), "settings.json")
+
+
+def load_settings(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        print(f"promptsill: can't read {tilde(path)} as JSON ({e}); not touching it", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        print(f"promptsill: {tilde(path)} is not a JSON object; not touching it", file=sys.stderr)
+        return None
+    return data
+
+
+def save_settings(path, settings):
+    if os.path.exists(path):
+        shutil.copy2(path, path + ".promptsill-backup")
+    write_json(path, settings)
+    if os.path.exists(path + ".promptsill-backup"):
+        shutil.copymode(path + ".promptsill-backup", path)
+
+
+def ours(entry):
+    return isinstance(entry, dict) and "promptsill" in str(entry.get("command", ""))
+
+
+def program():
+    me = os.path.abspath(sys.argv[0])
+    found = shutil.which("promptsill")
+    if found and os.path.realpath(found) == os.path.realpath(me):
+        return found
+    return me
+
+
+def copy_to(folder):
+    dest = os.path.join(os.path.abspath(os.path.expanduser(folder)), "promptsill")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    tmp = f"{dest}.{os.getpid()}"
+    shutil.copyfile(os.path.abspath(__file__), tmp)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, dest)
+    return dest
+
+
+def sync(folder):
+    dest = os.path.join(folder, "promptsill")
+    try:
+        if os.path.exists(dest) and read_text(dest, 10 ** 7) != read_text(os.path.abspath(__file__), 10 ** 7):
+            copy_to(folder)
+    except OSError:
+        pass
+    return 0
+
+
+def install(opts):
+    path = settings_path(opts)
+    settings = load_settings(path)
+    if settings is None:
+        return 1
+    current = settings.get("statusLine")
+    if current and not ours(current):
+        if not opts.get("force"):
+            command = current.get("command", "") if isinstance(current, dict) else current
+            print(f"{tilde(path)} already has a statusLine: {command}")
+            print("Leaving it alone. `promptsill install --force` replaces it, "
+                  "and `promptsill uninstall` brings it back later.")
+            return 1
+        previous = read_json(PREVIOUS)
+        previous[path] = current
+        write_json(PREVIOUS, previous)
+    if opts.get("plugin-data"):
+        command = shlex.quote(copy_to(opts["plugin-data"]))
+    else:
+        command = opts.get("command") or shlex.quote(program())
+    if opts.get("lang"):
+        command += f" --lang {shlex.quote(opts['lang'])}"
+    entry = dict(current) if ours(current) else {"padding": 0, "refreshInterval": 10}
+    entry.update({"type": "command", "command": command})
+    settings["statusLine"] = entry
+    save_settings(path, settings)
+    print(f"✓ statusLine in {tilde(path)} → {command}")
+    if current and not ours(current):
+        print("  The previous statusLine is saved; `promptsill uninstall` restores it.")
+    print("  It shows up on Claude Code's next refresh.")
+    return 0
+
+
+def uninstall(opts):
+    path = settings_path(opts)
+    settings = load_settings(path)
+    if settings is None:
+        return 1
+    if not ours(settings.get("statusLine")):
+        print(f"No promptsill statusLine in {tilde(path)}; nothing to do")
+        return 0
+    previous = read_json(PREVIOUS)
+    old = previous.pop(path, None)
+    if old:
+        settings["statusLine"] = old
+    else:
+        settings.pop("statusLine")
+    save_settings(path, settings)
+    if old is not None:
+        write_json(PREVIOUS, previous)
+    print(f"✓ removed from {tilde(path)}" + ("; the previous statusLine is back" if old else ""))
+    return 0
+
+
+USAGE = """promptsill — a status line for Claude Code
+
+  promptsill [--lang en|ru]       read Claude Code's status JSON on stdin, print the line
+  promptsill install [--force] [--lang en|ru] [--settings FILE]
+                                  set statusLine in ~/.claude/settings.json
+  promptsill uninstall [--settings FILE]
+                                  remove it and bring back the statusLine it replaced
+  promptsill preview [--lang en|ru] [--width N]
+                                  render sample data for the current folder
+  promptsill --version
+
+Settings live in ~/.config/promptsill/config.json; see the README."""
+
+
+def parse(args):
+    opts, rest = {}, []
+    it = iter(args)
+    for arg in it:
+        if arg in ("--lang", "--settings", "--width", "--command", "--plugin-data"):
+            opts[arg[2:]] = next(it, "")
+        elif arg.startswith(("--lang=", "--settings=", "--width=", "--command=", "--plugin-data=")):
+            key, _, value = arg[2:].partition("=")
+            opts[key] = value
+        elif arg == "--force":
+            opts["force"] = True
+        else:
+            rest.append(arg)
+    return opts, rest
+
+
+def main(argv):
+    opts, rest = parse(argv)
+    cmd = rest[0] if rest else ""
+    if cmd in ("-h", "--help", "help") or (not cmd and sys.stdin.isatty()):
+        print(USAGE)
+        return 0
+    if cmd in ("-V", "--version", "version"):
+        print(VERSION)
+        return 0
+    if cmd == "install":
+        return install(opts)
+    if cmd == "uninstall":
+        return uninstall(opts)
+    if cmd == "_sync" and len(rest) == 2:
+        return sync(rest[1])
+    configure(opts.get("lang"))
+    if cmd == "preview":
+        try:
+            cols = int(opts.get("width") or 0) or columns()
+        except ValueError:
+            cols = columns()
+        print(render(sample(os.getcwd()), cols))
+        return 0
+    if cmd:
+        print(f"promptsill: unknown command {cmd!r}\n\n{USAGE}", file=sys.stderr)
+        return 2
+    try:
+        d = json.load(sys.stdin)
+    except ValueError:
+        d = {}
+    print(render(d if isinstance(d, dict) else {}, columns()))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
