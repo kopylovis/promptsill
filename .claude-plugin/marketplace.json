@@ -1,0 +1,14 @@
+{
+  "name": "promptsill",
+  "description": "promptsill, a status line for Claude Code",
+  "owner": {
+    "name": "kopylovis"
+  },
+  "plugins": [
+    {
+      "name": "promptsill",
+      "source": ".",
+      "description": "Status line for Claude Code: limit pace, context, cache timer, git, plus your dev servers, busy ports, node version, memory, Gradle and simulators"
+    }
+  ]
+}
