@@ -9,15 +9,19 @@ import sys
 import time
 from urllib.parse import quote
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 HOME = os.path.expanduser("~")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "promptsill")
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "promptsill")
 CONFIG = os.path.join(CONFIG_DIR, "config.json")
 PREVIOUS = os.path.join(CONFIG_DIR, "previous-statusline.json")
+BADGES = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "promptsill", "badges")
+BADGE_NAME = re.compile(r"^[\w.-]{1,64}$")
+MAX_BADGES = 8
 GB = 1073741824
 MB = 1048576
 DIM, YELLOW, RED, GREEN, CYAN = "2", "33", "31", "32", "36"
+COLORS = {"green": GREEN, "yellow": YELLOW, "red": RED, "cyan": CYAN, "dim": DIM}
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
 OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
 
@@ -470,7 +474,7 @@ def dev_parts(proj):
     parts = []
     root = proj["root"]
     servers = cached("listeners", 5, listeners)
-    mine = [s for s in servers if s["cwd"] == root or s["cwd"].startswith(root.rstrip("/") + "/")]
+    mine = [s for s in servers if inside(s["cwd"], root)]
     for s in mine:
         text = f"{s['name']} :{','.join(map(str, s['ports'][:2]))}"
         parts.append((1, color(link(text, f"http://localhost:{s['ports'][0]}"), GREEN)))
@@ -508,6 +512,39 @@ def branch_part(g, proj, d):
     return (1, color(link(text, url), YELLOW if g["ahead"] >= 5 or g["changed"] >= 20 else GREEN))
 
 
+def inside(cwd, root):
+    return cwd == root or cwd.startswith(root.rstrip("/") + "/")
+
+
+def badges(d, cwd, now=None):
+    """Labels other tools leave in BADGES, one JSON file each; see the README."""
+    now = now or time.time()
+    try:
+        names = sorted(n for n in os.listdir(BADGES) if n.endswith(".json"))
+    except OSError:
+        return []
+    parts = []
+    for name in names:
+        b = read_json(os.path.join(BADGES, name))
+        text = re.sub(r"[\x00-\x1f\x7f]", "", str(b.get("text") or "")).strip()[:40]
+        expires = b.get("expires")
+        if not text or (isinstance(expires, (int, float)) and expires <= now):
+            continue
+        if b.get("session") and b["session"] != d.get("session_id"):
+            continue
+        if b.get("cwd") and not inside(cwd, os.path.expanduser(str(b["cwd"]))):
+            continue
+        try:
+            priority = min(5, max(1, int(b.get("priority", 2))))
+        except (TypeError, ValueError):
+            priority = 2
+        url = b.get("url") if isinstance(b.get("url"), str) else None
+        parts.append((priority, color(link(text, url), COLORS.get(b.get("color"), ""))))
+        if len(parts) == MAX_BADGES:
+            break
+    return parts
+
+
 def work_line(d):
     parts = []
     cwd = (d.get("workspace") or {}).get("current_dir") or d.get("cwd") or os.getcwd()
@@ -516,6 +553,7 @@ def work_line(d):
     g = cached("git-" + cwd, 3, lambda: git(cwd))
     if g and g.get("branch"):
         parts.append(branch_part(g, proj, d))
+    parts += badges(d, cwd)
     if "web" in kinds:
         parts += dev_parts(proj)
         if proj.get("node_dir"):
@@ -728,18 +766,72 @@ USAGE = """promptsill — a status line for Claude Code
                                   remove it and bring back the statusLine it replaced
   promptsill preview [--lang en|ru] [--width N]
                                   render sample data for the current folder
+  promptsill badge set NAME TEXT [--color green|yellow|red|cyan|dim] [--session ID]
+                       [--cwd DIR] [--ttl SECONDS] [--url URL] [--priority 1-5]
+                                  show a label on the second line, e.g. from a hook
+  promptsill badge clear NAME | badge list
   promptsill --version
 
 Settings live in ~/.config/promptsill/config.json; see the README."""
+
+
+VALUED = ("--lang", "--settings", "--width", "--command", "--plugin-data", "--color", "--session", "--cwd", "--ttl",
+          "--url", "--priority")
+
+
+def badge(opts, rest):
+    action = rest[1] if len(rest) > 1 else "list"
+    if action == "list":
+        try:
+            names = sorted(n[:-5] for n in os.listdir(BADGES) if n.endswith(".json"))
+        except OSError:
+            names = []
+        for name in names:
+            print(f"{name}\t{json.dumps(read_json(os.path.join(BADGES, name + '.json')), ensure_ascii=False)}")
+        return 0
+    if len(rest) < 3 or not BADGE_NAME.match(rest[2]):
+        print("promptsill badge: give a name of letters, digits, '.', '_' or '-'", file=sys.stderr)
+        return 2
+    path = os.path.join(BADGES, rest[2] + ".json")
+    if action == "clear":
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        return 0
+    if action != "set" or len(rest) < 4:
+        print(USAGE, file=sys.stderr)
+        return 2
+    data = {"text": " ".join(rest[3:])}
+    if opts.get("color"):
+        if opts["color"] not in COLORS:
+            print(f"promptsill badge: color is one of {', '.join(COLORS)}", file=sys.stderr)
+            return 2
+        data["color"] = opts["color"]
+    for key in ("session", "url"):
+        if opts.get(key):
+            data[key] = opts[key]
+    if opts.get("cwd"):
+        data["cwd"] = os.path.abspath(os.path.expanduser(opts["cwd"]))
+    try:
+        if opts.get("ttl"):
+            data["expires"] = int(time.time() + float(opts["ttl"]))
+        if opts.get("priority"):
+            data["priority"] = int(opts["priority"])
+    except ValueError:
+        print("promptsill badge: --ttl and --priority take numbers", file=sys.stderr)
+        return 2
+    write_json(path, data)
+    return 0
 
 
 def parse(args):
     opts, rest = {}, []
     it = iter(args)
     for arg in it:
-        if arg in ("--lang", "--settings", "--width", "--command", "--plugin-data"):
+        if arg in VALUED:
             opts[arg[2:]] = next(it, "")
-        elif arg.startswith(("--lang=", "--settings=", "--width=", "--command=", "--plugin-data=")):
+        elif arg.startswith(tuple(v + "=" for v in VALUED)):
             key, _, value = arg[2:].partition("=")
             opts[key] = value
         elif arg == "--force":
@@ -762,6 +854,8 @@ def main(argv):
         return install(opts)
     if cmd == "uninstall":
         return uninstall(opts)
+    if cmd == "badge":
+        return badge(opts, rest)
     if cmd == "_sync" and len(rest) == 2:
         return sync(rest[1])
     configure(opts.get("lang"))

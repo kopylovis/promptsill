@@ -65,6 +65,7 @@ promptsill is a single Python file with no dependencies. It needs `python3` 3.9 
 promptsill install [--force] [--lang en|ru]   add the statusLine to ~/.claude/settings.json
 promptsill uninstall                          remove it, and bring back the one it replaced
 promptsill preview [--lang en|ru] [--width N] render sample data for the current folder
+promptsill badge set|clear|list ...           labels from hooks and scripts, see below
 promptsill --version
 ```
 
@@ -89,9 +90,36 @@ Optional `~/.config/promptsill/config.json`:
 - `color`: `false` turns colors off; so does the `NO_COLOR` environment variable.
 - `ascii`: `[##---]` bars for fonts without block characters; also `PROMPTSILL_ASCII=1`.
 
+## Badges from hooks and scripts
+
+Any hook or script can put a short label on the second line, for example to show that a mode is on. A badge is a JSON file in `~/.local/state/promptsill/badges/` (or `$XDG_STATE_HOME/promptsill/badges/`), one file per badge. promptsill shows it on the next refresh and stops showing it when the file is gone.
+
+```json
+{"text": "humanize", "color": "green"}
+```
+
+Only `text` is required. The other fields:
+
+- `color`: `green`, `yellow`, `red`, `cyan` or `dim`.
+- `session`: show the badge only in the Claude Code session with this `session_id`. Hooks get it in their input.
+- `cwd`: show it only in this folder and below.
+- `expires`: Unix time after which the badge is ignored.
+- `url`: makes the badge a clickable link.
+- `priority`: 1 to 5, default 2. When the line doesn't fit, higher numbers are dropped first.
+
+The same from the command line:
+
+```bash
+promptsill badge set build-mode release --color yellow --cwd ~/app --ttl 3600
+promptsill badge clear build-mode
+promptsill badge list
+```
+
+Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool's name so they don't clash. promptsill shows at most 8 badges and strips control characters from the text.
+
 ## Privacy
 
-promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, runs `git status`, `lsof` and `ps`, and keeps a few seconds of cache in `~/.cache/promptsill`.
+promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it and the badge files, runs `git status`, `lsof` and `ps`, and keeps a few seconds of cache in `~/.cache/promptsill`.
 
 ## Development
 
