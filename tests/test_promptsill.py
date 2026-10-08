@@ -2,6 +2,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ SCRIPT = os.path.join(ROOT, "promptsill")
 TMP = tempfile.mkdtemp(prefix="promptsill-test-")
 os.environ["XDG_CACHE_HOME"] = os.path.join(TMP, "cache")
 os.environ["XDG_CONFIG_HOME"] = os.path.join(TMP, "config")
+os.environ["XDG_STATE_HOME"] = os.path.join(TMP, "state")
 
 loader = importlib.machinery.SourceFileLoader("promptsill", SCRIPT)
 spec = importlib.util.spec_from_loader("promptsill", loader)
@@ -294,6 +296,59 @@ class Install(unittest.TestCase):
         self.assertEqual(cli("_sync", data).returncode, 0)
         with open(copy) as a, open(SCRIPT) as b:
             self.assertEqual(a.read(), b.read())
+
+
+class Badges(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+        shutil.rmtree(ps.BADGES, ignore_errors=True)
+        os.makedirs(ps.BADGES)
+
+    def put(self, name, **data):
+        with open(os.path.join(ps.BADGES, name + ".json"), "w") as f:
+            json.dump(data, f)
+
+    def texts(self, d=None, cwd="/work/app"):
+        return [plain(p[1]) for p in ps.badges(d or {"session_id": "s1"}, cwd)]
+
+    def test_shows_text_with_color(self):
+        self.put("mode", text="humanize", color="green")
+        parts = ps.badges({}, "/work")
+        self.assertEqual(plain(parts[0][1]), "humanize")
+        self.assertIn(ESC + "[32m", parts[0][1])
+
+    def test_filters_session_folder_and_expiry(self):
+        self.put("a", text="mine", session="s1")
+        self.put("b", text="other session", session="s2")
+        self.put("c", text="here", cwd="/work")
+        self.put("d", text="elsewhere", cwd="/other")
+        self.put("e", text="old", expires=time.time() - 1)
+        self.put("f", text="fresh", expires=time.time() + 60)
+        self.assertEqual(self.texts(), ["mine", "here", "fresh"])
+
+    def test_bad_files_are_skipped(self):
+        self.put("empty", text="")
+        self.put("weird", text="a\x1b[31mb", priority="high", color="purple")
+        with open(os.path.join(ps.BADGES, "broken.json"), "w") as f:
+            f.write("{")
+        self.assertEqual(self.texts(), ["a[31mb"])
+
+    def test_no_folder(self):
+        shutil.rmtree(ps.BADGES)
+        self.assertEqual(ps.badges({}, "/"), [])
+
+    def test_cli_set_list_clear(self):
+        env = {"XDG_STATE_HOME": os.environ["XDG_STATE_HOME"]}
+        self.assertEqual(cli("badge", "set", "mnrh-x", "hello", "world", "--color", "cyan", "--ttl", "60",
+                             env=env).returncode, 0)
+        data = json.load(open(os.path.join(ps.BADGES, "mnrh-x.json")))
+        self.assertEqual(data["text"], "hello world")
+        self.assertEqual(data["color"], "cyan")
+        self.assertIn("mnrh-x", cli("badge", "list", env=env).stdout)
+        self.assertEqual(cli("badge", "set", "bad/name", "x", env=env).returncode, 2)
+        self.assertEqual(cli("badge", "set", "x", "y", "--color", "pink", env=env).returncode, 2)
+        self.assertEqual(cli("badge", "clear", "mnrh-x", env=env).returncode, 0)
+        self.assertFalse(os.path.exists(os.path.join(ps.BADGES, "mnrh-x.json")))
 
 
 class Cli(unittest.TestCase):

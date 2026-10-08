@@ -1,6 +1,6 @@
 {
   "name": "promptsill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Status line for Claude Code: limit pace, context, cache timer, git, plus your dev servers, busy ports, node version, memory, Gradle and simulators",
   "author": {
     "name": "kopylovis"
