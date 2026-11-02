@@ -22,6 +22,7 @@ GB = 1073741824
 MB = 1048576
 DIM, YELLOW, RED, GREEN, CYAN = "2", "33", "31", "32", "36"
 COLORS = {"green": GREEN, "yellow": YELLOW, "red": RED, "cyan": CYAN, "dim": DIM}
+MISS_SHOWN = 300
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
 OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
 
@@ -30,7 +31,11 @@ TEXT = {
         "context": "context", "five_hour": "5h", "seven_day": "week", "resets": "resets {when}",
         "runs_out": "runs out {when}", "in_min": "in {n} min", "at": "at {hm}",
         "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        "cache_left": "cache {left}", "cache_gone": "cache expired",
+        "cache_left": "cache {left}", "cache_gone": "cache expired", "cache_cost": "{n} tokens",
+        "cache_miss": "cache reset: {cause}", "k": "{n}k",
+        "causes": {"system_prompt_changed": "system prompt changed", "tools_changed": "tools changed",
+                   "model_changed": "model changed", "messages_rewritten": "history rewritten",
+                   "likely_server_side": "server side"},
         "s": "{n}s", "m": "{n}m", "h": "{n}h",
         "not_pushed": "not pushed", "busy": ":{port} taken: {owner}",
         "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
@@ -43,7 +48,11 @@ TEXT = {
         "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
         "runs_out": "кончится {when}", "in_min": "через {n} мин", "at": "в {hm}",
         "days": ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
-        "cache_left": "кэш {left}", "cache_gone": "кэш истёк",
+        "cache_left": "кэш {left}", "cache_gone": "кэш истёк", "cache_cost": "{n} токенов",
+        "cache_miss": "кэш сброшен: {cause}", "k": "{n} тыс.",
+        "causes": {"system_prompt_changed": "сменился системный промпт", "tools_changed": "сменились инструменты",
+                   "model_changed": "сменилась модель", "messages_rewritten": "переписана история",
+                   "likely_server_side": "на стороне сервера"},
         "s": "{n} с", "m": "{n} мин", "h": "{n} ч",
         "not_pushed": "не запушена", "busy": ":{port} занят: {owner}",
         "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
@@ -435,6 +444,22 @@ def limit_part(key, lim, now):
     return (prio, text, f"{label} {number}")
 
 
+def tokens(n):
+    return t("k", n=f"{n / 1000:.0f}") if n < 10 ** 6 else f"{n / 10 ** 6:.1f}M"
+
+
+def miss_part(cache, now):
+    at = cache.get("last_miss_at")
+    if not isinstance(at, (int, float)) or not 0 <= now - at <= MISS_SHOWN:
+        return None
+    causes = (cache.get("last_miss_cause") or {}).get("causes") or []
+    names = TEXT[OPTS["lang"]]["causes"]
+    known = [names[c] for c in causes if isinstance(c, str) and c in names]
+    if not known:
+        return None
+    return (3, color(t("cache_miss", cause=", ".join(known)), YELLOW))
+
+
 def cache_part(cache, now):
     if not isinstance(cache, dict) or not cache.get("caching_observed"):
         return None
@@ -445,8 +470,13 @@ def cache_part(cache, now):
         if 0 < left <= max(60, ttl // 10):
             return (2, color(t("cache_left", left=span(left)), YELLOW))
         if left > 0:
-            return None
+            return miss_part(cache, now)
     if cache.get("requests"):
+        cost = cache.get("recache_tokens_if_cold")
+        if isinstance(cost, (int, float)) and cost >= 1000:
+            code = YELLOW if cost >= 100000 else DIM
+            text = f"{t('cache_gone')} ({t('cache_cost', n=tokens(cost))})"
+            return (3 if code == YELLOW else 4, color(text, code), color(t("cache_gone"), code))
         return (4, color(t("cache_gone"), DIM))
     return None
 
