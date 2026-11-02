@@ -344,6 +344,39 @@ class RemoteControl(unittest.TestCase):
         self.assertEqual(plain(part[2]), "RC")
 
 
+class OtherSessions(unittest.TestCase):
+    now = 1_800_000_000
+
+    def setUp(self):
+        reset_opts()
+
+    def s(self, sid, status, ago, name=None, started_ago=3600):
+        return {"sessionId": sid, "status": status, "name": name or sid, "cwd": "/w/" + sid,
+                "statusUpdatedAt": (self.now - ago) * 1000, "startedAt": (self.now - started_ago) * 1000}
+
+    def texts(self, sessions):
+        return [plain(p[1]) for p in ps.others_parts({"session_id": "me"}, sessions, self.now)]
+
+    def test_waiting_and_done(self):
+        sessions = [self.s("me", "waiting", 5), self.s("kcalm", "waiting", 30), self.s("auth", "idle", 60),
+                    self.s("old", "idle", 3600), self.s("busy", "busy", 10)]
+        self.assertEqual(self.texts(sessions), ["kcalm waits for you", "auth done"])
+        reset_opts(lang="ru")
+        self.assertEqual(self.texts(sessions), ["kcalm ждет тебя", "auth закончила"])
+
+    def test_fresh_idle_session_is_not_done(self):
+        self.assertEqual(self.texts([self.s("new", "idle", 60, started_ago=61)]), [])
+
+    def test_many_are_counted(self):
+        sessions = [self.s(n, "waiting", 10) for n in ("a", "b", "c")] + [self.s(n, "idle", 10) for n in ("d", "e")]
+        self.assertEqual(self.texts(sessions), ["3 sessions wait for you", "d, e done"])
+
+    def test_name_falls_back_to_folder(self):
+        s = self.s("x", "waiting", 10)
+        s["name"] = None
+        self.assertEqual(self.texts([s]), ["x waits for you"])
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform
