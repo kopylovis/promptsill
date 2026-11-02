@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="70" viewBox="0 0 1300 70">
+<svg xmlns="http://www.w3.org/2000/svg" width="1392" height="70" viewBox="0 0 1392 70">
 <rect width="100%" height="100%" rx="8" fill="#1e1e1e"/>
 <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">
 <text x="16.0 24.4 32.8 41.2" y="30" fill="#66cccc">Opus</text>
@@ -59,10 +59,13 @@
 <text x="956.8 965.2 973.6" y="52" fill="#ffcc66">2.1</text>
 <text x="990.4" y="52" fill="#7a7a7a">·</text>
 <text x="1007.2 1015.6 1024.0 1032.4 1040.8 1049.2" y="52" fill="#ffcc66">Gradle</text>
-<text x="1066.0" y="52" fill="#ffcc66">2</text>
-<text x="1082.8 1091.2 1099.6 1108.0" y="52" fill="#ffcc66">(1.9</text>
-<text x="1124.8 1133.2 1141.6" y="52" fill="#ffcc66">ГБ)</text>
-<text x="1158.4" y="52" fill="#7a7a7a">·</text>
-<text x="1175.2 1183.6 1192.0 1200.4 1208.8 1217.2 1225.6 1234.0 1242.4 1250.8 1259.2" y="52" fill="#d4d4d4">симуляторов</text>
-<text x="1276.0" y="52" fill="#d4d4d4">1</text>
+<text x="1066.0" y="52" fill="#ffcc66">1</text>
+<text x="1082.8" y="52" fill="#ffcc66">+</text>
+<text x="1099.6 1108.0 1116.4 1124.8 1133.2 1141.6" y="52" fill="#ffcc66">Kotlin</text>
+<text x="1158.4" y="52" fill="#ffcc66">1</text>
+<text x="1175.2 1183.6 1192.0 1200.4" y="52" fill="#ffcc66">(1.9</text>
+<text x="1217.2 1225.6 1234.0" y="52" fill="#ffcc66">ГБ)</text>
+<text x="1250.8" y="52" fill="#7a7a7a">·</text>
+<text x="1267.6 1276.0 1284.4 1292.8 1301.2 1309.6 1318.0 1326.4 1334.8 1343.2 1351.6" y="52" fill="#d4d4d4">симуляторов</text>
+<text x="1368.4" y="52" fill="#d4d4d4">1</text>
 </g></svg>
