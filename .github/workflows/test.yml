@@ -10,7 +10,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest]
-        python: ["3.9", "3.x"]
+        python: ["3.x"]
+        include:
+          # Python 3.9 is the oldest we support; newer Ubuntu runner images no longer have it.
+          - os: macos-latest
+            python: "3.9"
+          - os: ubuntu-24.04
+            python: "3.9"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
