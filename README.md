@@ -19,6 +19,7 @@ The second line is about the project you're in and the machine it runs on. Each 
 - **Memory pressure** on macOS. Used memory and swap, yellow or red when free memory runs low or swap grows.
 - **Gradle and Kotlin daemons**, counted separately, with the RAM they hold together: `Gradle 2 + Kotlin 1 (1.9 GB)`. Shown in JVM and Android projects, or anywhere when memory is tight or the daemons hold 1.5 GB or more.
 - **iOS simulators and the Android emulator** in mobile projects, so you notice the ones you forgot to close.
+- **A slowed-down Mac.** `CPU slowed to 70%` when macOS throttles the CPU, `overheating` on a thermal warning, `low power mode`, and `battery 15%` when the battery is at 20% or less and not charging. A build that suddenly takes twice as long usually has one of these behind it.
 - **Low disk space.** `disk 12.0 GB free` once less than 15 GB is left on the home volume, red under 5 GB. Xcode's DerivedData, simulators and Gradle caches eat it quietly.
 - **A huge session file**, from 50 MB up.
 

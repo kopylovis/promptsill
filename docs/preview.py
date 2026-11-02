@@ -25,6 +25,7 @@ DEMO = {
     "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
     "sessions": [],
     "disk": 200 * ps.GB,
+    "power": {},
     "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
                 "daemon_mem": 1.9 * ps.GB, "sims": 1, "emulator": False},
 }
