@@ -43,6 +43,8 @@ TEXT = {
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "disk": "disk {size} free", "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
+        "rebase": "rebasing", "merge": "merging", "cherry_pick": "cherry-picking", "revert": "reverting",
+        "bisect": "bisecting", "conflicts": "conflicts {n}",
         "waits_1": "{names} waits for you", "waits_2": "{names} wait for you", "waits_n": "{n} sessions wait for you",
         "done_1": "{names} done", "done_2": "{names} done", "done_n": "{n} sessions done",
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
@@ -63,6 +65,8 @@ TEXT = {
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "disk": "на диске {size}", "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
+        "rebase": "rebase", "merge": "слияние", "cherry_pick": "cherry-pick", "revert": "revert",
+        "bisect": "bisect", "conflicts": "конфликты {n}",
         "waits_1": "{names} ждет тебя", "waits_2": "{names} ждут тебя", "waits_n": "ждут тебя: {n}",
         "done_1": "{names} закончила", "done_2": "{names} закончили", "done_n": "закончили: {n}",
         "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
@@ -215,7 +219,7 @@ def git(cwd):
     out = run(["git", "-C", cwd, "status", "--porcelain=v2", "--branch"], timeout=3)
     if not out:
         return None
-    info = {"branch": None, "ahead": 0, "behind": 0, "upstream": False, "changed": 0}
+    info = {"branch": None, "ahead": 0, "behind": 0, "upstream": False, "changed": 0, "conflicts": 0}
     for line in out.splitlines():
         if line.startswith("# branch.head "):
             info["branch"] = line.split(" ", 2)[2]
@@ -227,7 +231,28 @@ def git(cwd):
                 info["ahead"], info["behind"] = int(m.group(1)), int(m.group(2))
         elif line and not line.startswith("#"):
             info["changed"] += 1
+            info["conflicts"] += line.startswith("u ")
     return info
+
+
+def git_op(git_dir):
+    """A rebase, merge, cherry-pick, revert or bisect left in progress, read from .git like git's own prompt."""
+    if not git_dir:
+        return None
+    path = lambda *p: os.path.join(git_dir, *p)
+    for folder, step, total in (("rebase-merge", "msgnum", "end"), ("rebase-apply", "next", "last")):
+        if os.path.isdir(path(folder)):
+            branch = read_text(path(folder, "head-name"), 500).strip()
+            op = {"op": "rebase", "branch": branch[11:] if branch.startswith("refs/heads/") else None}
+            done, of = read_text(path(folder, step), 50).strip(), read_text(path(folder, total), 50).strip()
+            if done.isdigit() and of.isdigit():
+                op["step"] = f"{done}/{of}"
+            return op
+    for name, op in (("MERGE_HEAD", "merge"), ("CHERRY_PICK_HEAD", "cherry_pick"), ("REVERT_HEAD", "revert"),
+                     ("BISECT_LOG", "bisect")):
+        if os.path.exists(path(name)):
+            return {"op": op}
+    return None
 
 
 def web_url(remote):
@@ -290,7 +315,9 @@ def project(cwd):
         else:
             ports += [port for dep, port in DEV_PORTS if dep in deps][:1]
     repo = web_url(run(["git", "-C", root, "remote", "get-url", "origin"], timeout=2))
-    return {"root": root, "kinds": sorted(kinds), "ports": sorted(set(ports)), "node_dir": node_dir, "repo": repo}
+    git_dir = run(["git", "-C", cwd, "rev-parse", "--absolute-git-dir"], timeout=2).strip() or None
+    return {"root": root, "kinds": sorted(kinds), "ports": sorted(set(ports)), "node_dir": node_dir, "repo": repo,
+            "git_dir": git_dir}
 
 
 def listeners():
@@ -643,8 +670,21 @@ def repo_url(d, proj):
     return proj.get("repo")
 
 
-def branch_part(g, proj, d):
+def op_part(op, g):
+    if not op and not g.get("conflicts"):
+        return None
+    words = []
+    if op:
+        words.append(t(op["op"]) + (f" {op['step']}" if op.get("step") else ""))
+    if g.get("conflicts"):
+        words.append(t("conflicts", n=g["conflicts"]))
+    return (1, color(", ".join(words), RED if g.get("conflicts") else YELLOW))
+
+
+def branch_part(g, proj, d, op=None):
     text = g["branch"]
+    if text == "(detached)" and op and op.get("branch"):
+        text = op["branch"]
     if g["ahead"]:
         text += f" ↑{g['ahead']}"
     if g["behind"]:
@@ -723,8 +763,12 @@ def work_line(d):
     part = worktree_part(d, g)
     if part:
         parts.append(part)
+    op = git_op(proj.get("git_dir")) if g else None
     if g and g.get("branch"):
-        parts.append(branch_part(g, proj, d))
+        parts.append(branch_part(g, proj, d, op))
+    part = op_part(op, g) if g else None
+    if part:
+        parts.append(part)
     part = review_part(d)
     if part:
         parts.append(part)
