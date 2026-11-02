@@ -26,6 +26,7 @@ The second line is about the project you're in and the machine it runs on. Each 
 - **Context** as a bar with 1/8-cell precision.
 - **Limit pace.** For the 5-hour and weekly limits, promptsill compares how much you've used with how much of the window has passed. 60% in the first hour of five is a problem; 60% in the last hour is fine. Colors follow the pace, not the raw percentage. `+23%` means you're 23 points ahead of an even pace, and `runs out at 15:10` says when you'll hit the limit if you keep going like this.
 - **Prompt cache timer.** `cache 44s` shortly before the cache expires, and `cache expired` after it has. The next message after expiry re-reads the whole conversation, which costs more of your limit.
+- **Remote Control.** `remote control` while the session is reachable from claude.ai or the Claude app, clickable to open it there. Claude Code doesn't pass this to status lines, so promptsill reads it from Claude Code's own session files in `~/.claude/sessions/`. That's an internal format; if a future version changes it, the label just stops appearing.
 - **Git branch** with commits ahead and behind, `not pushed` and the number of changed files. It's clickable: it opens the pull request when one is open, otherwise the branch page.
 
 When the terminal is narrow, promptsill shortens the parts first, then drops the least important ones. The limits, context and branch stay.
@@ -119,7 +120,7 @@ Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool'
 
 ## Privacy
 
-promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it and the badge files, runs `git status`, `lsof` and `ps`, and keeps a few seconds of cache in `~/.cache/promptsill`.
+promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files and Claude Code's list of running sessions, runs `git status`, `lsof` and `ps`, and keeps a few seconds of cache in `~/.cache/promptsill`.
 
 ## Development
 

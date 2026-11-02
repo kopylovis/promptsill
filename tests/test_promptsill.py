@@ -224,6 +224,61 @@ class Daemons(unittest.TestCase):
         self.assertEqual(m["daemon_mem"], (2071552 + 30000) * 1024)
 
 
+class RemoteControl(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+        self.dir = tempfile.mkdtemp(dir=TMP)
+        os.makedirs(os.path.join(self.dir, "sessions"))
+        os.environ["CLAUDE_CONFIG_DIR"] = self.dir
+        os.environ.pop("CLAUDE_CODE_BRIDGE_SESSION_ID", None)
+
+    def tearDown(self):
+        os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        os.environ.pop("CLAUDE_CODE_BRIDGE_SESSION_ID", None)
+
+    def put(self, pid, **data):
+        with open(os.path.join(self.dir, "sessions", f"{pid}.json"), "w") as f:
+            json.dump({"pid": pid, **data}, f)
+
+    def test_on_from_registry(self):
+        self.put(os.getpid(), sessionId="s1", bridgeSessionId="session_01ABC", messagingSocketPath="/tmp/x.sock")
+        sessions = ps.live_sessions()
+        self.assertNotIn("messagingSocketPath", sessions[0])
+        self.assertEqual(ps.remote_control({"session_id": "s1"}, sessions), "session_01ABC")
+
+    def test_off_when_registry_has_no_bridge(self):
+        self.put(os.getpid(), sessionId="s1")
+        os.environ["CLAUDE_CODE_BRIDGE_SESSION_ID"] = "session_stale"
+        self.assertIsNone(ps.remote_control({"session_id": "s1"}, ps.live_sessions()))
+
+    def test_env_when_no_registry(self):
+        os.environ["CLAUDE_CODE_BRIDGE_SESSION_ID"] = "session_01XYZ"
+        self.assertEqual(ps.remote_control({"session_id": "s1"}, []), "session_01XYZ")
+
+    def test_dead_and_broken_entries_skipped(self):
+        dead = subprocess.Popen([sys.executable, "-c", ""])
+        dead.wait()
+        self.put(dead.pid, sessionId="s1", bridgeSessionId="session_dead")
+        with open(os.path.join(self.dir, "sessions", "9.json"), "w") as f:
+            f.write("{")
+        self.assertEqual(ps.live_sessions(), [])
+
+    def test_bad_id_ignored(self):
+        self.assertIsNone(ps.remote_control({"session_id": "s1"},
+                                            [{"sessionId": "s1", "bridgeSessionId": "../../evil?x=1"}]))
+
+    def test_part_links_to_session(self):
+        self.put(os.getpid(), sessionId="s1", bridgeSessionId="session_01ABC")
+        ps.cached = lambda name, ttl, fn, real=ps.cached: fn() if name == "sessions" else real(name, ttl, fn)
+        try:
+            part = ps.remote_part({"session_id": "s1"})
+        finally:
+            ps.cached = ps.cached.__defaults__[0]
+        self.assertEqual(plain(part[1]), "remote control")
+        self.assertIn("https://claude.ai/code/session_01ABC", part[1])
+        self.assertEqual(plain(part[2]), "RC")
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform

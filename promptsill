@@ -36,7 +36,7 @@ TEXT = {
         "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
-        "GB": "GB", "MB": "MB",
+        "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
@@ -48,7 +48,7 @@ TEXT = {
         "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
-        "GB": "ГБ", "MB": "МБ",
+        "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
     },
 }
 
@@ -449,12 +449,60 @@ def cache_part(cache, now):
     return None
 
 
+def claude_dir():
+    return os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude"))
+
+
+SESSION_KEYS = ("pid", "sessionId", "bridgeSessionId", "name", "cwd", "status", "waitingFor", "statusUpdatedAt")
+
+
+def live_sessions():
+    """Claude Code's own registry of running sessions, ~/.claude/sessions/<pid>.json. Not a public API."""
+    folder = os.path.join(claude_dir(), "sessions")
+    try:
+        names = [n for n in os.listdir(folder) if n.endswith(".json")]
+    except OSError:
+        return []
+    found = []
+    for name in names:
+        s = read_json(os.path.join(folder, name))
+        pid = s.get("pid")
+        if not isinstance(pid, int) or not s.get("sessionId"):
+            continue
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            continue
+        except OSError:
+            pass
+        found.append({k: s[k] for k in SESSION_KEYS if k in s})
+    return found
+
+
+def remote_control(d, sessions):
+    sid = d.get("session_id")
+    mine = next((s for s in sessions if sid and s.get("sessionId") == sid), None)
+    bridge = mine.get("bridgeSessionId") if mine else os.environ.get("CLAUDE_CODE_BRIDGE_SESSION_ID")
+    return bridge if isinstance(bridge, str) and re.match(r"^[\w-]{1,128}$", bridge) else None
+
+
+def remote_part(d):
+    bridge = remote_control(d, cached("sessions", 3, live_sessions))
+    if not bridge:
+        return None
+    url = f"https://claude.ai/code/{bridge}"
+    return (2, color(link(t("remote"), url), GREEN), color(link(t("remote_short"), url), GREEN))
+
+
 def claude_line(d, now=None):
     now = time.time() if now is None else now
     parts = []
     model = (d.get("model") or {}).get("display_name")
     if model:
         parts.append((4, color(model, CYAN)))
+    part = remote_part(d)
+    if part:
+        parts.append(part)
     ctx = (d.get("context_window") or {}).get("used_percentage")
     if isinstance(ctx, (int, float)):
         code = level(ctx, 60, 80)
