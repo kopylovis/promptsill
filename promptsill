@@ -37,6 +37,7 @@ TEXT = {
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
+        "fast": "fast",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
@@ -49,6 +50,7 @@ TEXT = {
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
+        "fast": "fast",
     },
 }
 
@@ -494,12 +496,25 @@ def remote_part(d):
     return (2, color(link(t("remote"), url), GREEN), color(link(t("remote_short"), url), GREEN))
 
 
+def model_part(d):
+    model = (d.get("model") or {}).get("display_name")
+    if not model:
+        return None
+    text = color(model, CYAN)
+    effort = (d.get("effort") or {}).get("level")
+    if isinstance(effort, str) and re.match(r"^\w{1,10}$", effort):
+        text += " " + color(effort, CYAN)
+    if d.get("fast_mode") is True:
+        text += " " + color(t("fast"), YELLOW)
+    return (4, text, color(model, CYAN))
+
+
 def claude_line(d, now=None):
     now = time.time() if now is None else now
     parts = []
-    model = (d.get("model") or {}).get("display_name")
-    if model:
-        parts.append((4, color(model, CYAN)))
+    part = model_part(d)
+    if part:
+        parts.append(part)
     part = remote_part(d)
     if part:
         parts.append(part)
@@ -684,7 +699,7 @@ def render(d, cols=0):
 
 def sample(cwd):
     now = time.time()
-    return {"model": {"display_name": "Opus"}, "workspace": {"current_dir": cwd},
+    return {"model": {"display_name": "Opus"}, "effort": {"level": "high"}, "workspace": {"current_dir": cwd},
             "context_window": {"used_percentage": 42},
             "prompt_cache": {"caching_observed": True, "warm": True, "ttl": "5m", "expires_at": int(now + 45),
                              "requests": 12},

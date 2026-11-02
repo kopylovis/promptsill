@@ -89,6 +89,21 @@ class Render(unittest.TestCase):
         self.assertEqual(plain(ps.fit([(1, linked), (2, "abc")], 20)), "main · abc")
 
 
+class Model(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def test_effort_and_fast(self):
+        d = {"model": {"display_name": "Opus 5.5"}, "effort": {"level": "xhigh"}, "fast_mode": True}
+        part = ps.model_part(d)
+        self.assertEqual(plain(part[1]), "Opus 5.5 xhigh fast")
+        self.assertEqual(plain(part[2]), "Opus 5.5")
+
+    def test_plain_model(self):
+        self.assertEqual(plain(ps.model_part({"model": {"display_name": "Haiku"}, "fast_mode": False})[1]), "Haiku")
+        self.assertIsNone(ps.model_part({}))
+
+
 class Bars(unittest.TestCase):
     def setUp(self):
         reset_opts(color=False)

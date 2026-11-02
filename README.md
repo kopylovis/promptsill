@@ -5,7 +5,7 @@ A status line for [Claude Code](https://code.claude.com) that knows about your d
 ![promptsill status line: model, context bar, 5-hour limit with pace, weekly limit, cache timer; branch, dev server, busy port, node version, memory, Gradle, simulators](docs/preview-en.svg)
 
 ```text
-Opus · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
+Opus high · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
 checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · Gradle 1 + Kotlin 1 (1.9 GB)
 ```
 
@@ -23,6 +23,7 @@ The second line is about the project you're in and the machine it runs on. Each 
 
 ## The Claude part
 
+- **Model, effort and fast mode**: `Opus xhigh fast`. On a narrow terminal only the model name stays.
 - **Context** as a bar with 1/8-cell precision.
 - **Limit pace.** For the 5-hour and weekly limits, promptsill compares how much you've used with how much of the window has passed. 60% in the first hour of five is a problem; 60% in the last hour is fine. Colors follow the pace, not the raw percentage. `+23%` means you're 23 points ahead of an even pace, and `runs out at 15:10` says when you'll hit the limit if you keep going like this.
 - **Prompt cache timer.** `cache 44s` shortly before the cache expires, and `cache expired` after it has. The next message after expiry re-reads the whole conversation, which costs more of your limit.
