@@ -11,9 +11,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS runners are scarce on free accounts: one job there, the oldest supported Python on Ubuntu.
-          - os: macos-latest
-            python: "3.x"
+          # No macOS: on a free account its jobs waited up to 15 minutes for a runner and got cancelled.
+          # The macOS-only code (vm_stat, pmset) is tested with faked command output.
           - os: ubuntu-latest
             python: "3.x"
           # ubuntu-latest images no longer have Python 3.9.
