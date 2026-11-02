@@ -822,7 +822,7 @@ def work_line(d):
         tight = bool(code)
         parts.append((2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code)))
         if m["swap"] >= 0.5 * GB:
-            parts.append((2 if code else 5, color(t("swap", size=gb(m["swap"])), code)))
+            parts.append((2 if code else 5, color(t("swap", size=size(m["swap"])), code)))
     parts += power_parts(cached("power", 30, power))
     part = disk_part(cached("disk", 30, disk_free))
     if part:
