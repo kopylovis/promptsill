@@ -162,6 +162,16 @@ class Pace(unittest.TestCase):
         self.assertIn("resets", text)
         self.assertEqual(plain(part[2]), "5h 60% +40%")
 
+    def test_spend_limit_in_dollars(self):
+        lim = {"used_percentage": 24, "resets_at": self.now + 20 * 86400, "used_usd": 12.4, "limit_usd": 50,
+               "period": "monthly"}
+        self.assertEqual(plain(ps.limit_part("spend_limit", lim, self.now)[1]), "spend $12/$50")
+        lim = {"used_percentage": 80, "resets_at": self.now + 20 * 3600, "period": "daily"}
+        text = plain(ps.limit_part("spend_limit", lim, self.now)[1])
+        self.assertTrue(text.startswith("spend 80% +63%, runs out"), text)
+        lim = {"used_percentage": 95, "resets_at": self.now + 3600}
+        self.assertIn(ESC + "[31m", ps.limit_part("spend_limit", lim, self.now)[1])
+
     def test_week_hides_reset_when_calm(self):
         part = ps.limit_part("seven_day", self.lim(20, 3 * 86400), self.now)
         self.assertEqual(plain(part[1]), "week 20%")
