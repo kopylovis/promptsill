@@ -42,6 +42,8 @@ TEXT = {
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
+        "waits_1": "{names} waits for you", "waits_2": "{names} wait for you", "waits_n": "{n} sessions wait for you",
+        "done_1": "{names} done", "done_2": "{names} done", "done_n": "{n} sessions done",
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
     },
     "ru": {
@@ -60,6 +62,8 @@ TEXT = {
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
+        "waits_1": "{names} ждет тебя", "waits_2": "{names} ждут тебя", "waits_n": "ждут тебя: {n}",
+        "done_1": "{names} закончила", "done_2": "{names} закончили", "done_n": "закончили: {n}",
         "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
     },
 }
@@ -490,7 +494,9 @@ def claude_dir():
     return os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude"))
 
 
-SESSION_KEYS = ("pid", "sessionId", "bridgeSessionId", "name", "cwd", "status", "waitingFor", "statusUpdatedAt")
+SESSION_KEYS = ("pid", "sessionId", "bridgeSessionId", "name", "cwd", "status", "waitingFor", "statusUpdatedAt",
+                "startedAt")
+DONE_SHOWN = 600
 
 
 def live_sessions():
@@ -544,6 +550,31 @@ def model_part(d):
     return (4, text, color(model, CYAN))
 
 
+def session_label(s):
+    name = s.get("name") if isinstance(s.get("name"), str) else ""
+    name = name or os.path.basename(str(s.get("cwd") or "").rstrip("/")) or "?"
+    return re.sub(r"[\x00-\x1f\x7f]", "", name)[:30]
+
+
+def others_parts(d, sessions, now):
+    """Other Claude Code sessions on this machine that wait for you or have just finished."""
+    others = [s for s in sessions if s.get("sessionId") != d.get("session_id")]
+    waiting = [session_label(s) for s in others if s.get("status") == "waiting"]
+    done = []
+    for s in others:
+        changed, started = s.get("statusUpdatedAt"), s.get("startedAt")
+        if (s.get("status") == "idle" and isinstance(changed, (int, float)) and 0 <= now - changed / 1000 <= DONE_SHOWN
+                and not (isinstance(started, (int, float)) and changed - started < 5000)):
+            done.append(session_label(s))
+    parts = []
+    for names, key, code, prio in ((waiting, "waits", YELLOW, 2), (done, "done", GREEN, 4)):
+        if len(names) > 2:
+            parts.append((prio, color(t(key + "_n", n=len(names)), code)))
+        elif names:
+            parts.append((prio, color(t(f"{key}_{len(names)}", names=", ".join(sorted(names))), code)))
+    return parts
+
+
 def claude_line(d, now=None):
     now = time.time() if now is None else now
     parts = []
@@ -567,6 +598,7 @@ def claude_line(d, now=None):
     part = cache_part(d.get("prompt_cache"), now)
     if part:
         parts.append(part)
+    parts += others_parts(d, cached("sessions", 3, live_sessions), now)
     return parts
 
 
