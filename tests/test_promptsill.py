@@ -438,6 +438,45 @@ class GitState(unittest.TestCase):
         self.assertEqual((g["changed"], g["conflicts"]), (2, 1))
 
 
+class Power(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def fake(self, outputs):
+        real_run, real_platform = ps.run, ps.sys.platform
+        ps.run = lambda cmd, **kw: outputs.get(" ".join(cmd[1:]), "")
+        ps.sys.platform = "darwin"
+        try:
+            return ps.power()
+        finally:
+            ps.run, ps.sys.platform = real_run, real_platform
+
+    def test_calm_mac(self):
+        p = self.fake({"-g": " lowpowermode         0\n",
+                       "-g therm": "Note: No thermal warning level has been recorded\n",
+                       "-g batt": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t100%; charged; 0:00 remaining\n"})
+        self.assertEqual(p, {"low_power": False})
+        self.assertEqual(ps.power_parts(p), [])
+
+    def test_hot_slow_and_draining(self):
+        p = self.fake({"-g": " lowpowermode         1\n",
+                       "-g therm": "Thermal warning level set to 2.\n\tCPU_Speed_Limit \t= 70\n",
+                       "-g batt": " -InternalBattery-0 (id=1)\t9%; discharging; 0:20 remaining\n"})
+        self.assertEqual(p, {"low_power": True, "cpu_limit": 70, "hot": True, "battery": 9})
+        texts = [plain(x[1]) for x in ps.power_parts(p)]
+        self.assertEqual(texts, ["CPU slowed to 70%", "low power mode", "battery 9%"])
+        self.assertIn(ESC + "[31m", ps.power_parts(p)[2][1])
+        self.assertEqual([plain(x[1]) for x in ps.power_parts({"hot": True})], ["overheating"])
+
+    def test_off_macos(self):
+        real = ps.sys.platform
+        ps.sys.platform = "linux"
+        try:
+            self.assertEqual(ps.power(), {})
+        finally:
+            ps.sys.platform = real
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform

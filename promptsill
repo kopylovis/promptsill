@@ -41,7 +41,9 @@ TEXT = {
         "not_pushed": "not pushed", "busy": ":{port} taken: {owner}",
         "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
-        "disk": "disk {size} free", "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
+        "cpu_limit": "CPU slowed to {n}%", "hot": "overheating", "low_power": "low power mode",
+        "battery": "battery {n}%", "disk": "disk {size} free",
+        "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
         "rebase": "rebasing", "merge": "merging", "cherry_pick": "cherry-picking", "revert": "reverting",
         "bisect": "bisecting", "conflicts": "conflicts {n}",
@@ -63,7 +65,9 @@ TEXT = {
         "not_pushed": "не запушена", "busy": ":{port} занят: {owner}",
         "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
-        "disk": "на диске {size}", "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
+        "cpu_limit": "CPU замедлен до {n}%", "hot": "перегрев", "low_power": "энергосбережение",
+        "battery": "батарея {n}%", "disk": "на диске {size}",
+        "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
         "rebase": "rebase", "merge": "слияние", "cherry_pick": "cherry-pick", "revert": "revert",
         "bisect": "bisect", "conflicts": "конфликты {n}",
@@ -209,6 +213,37 @@ def disk_part(free):
         return None
     code = RED if free < DISK_LOW / 3 else YELLOW
     return (2 if code == RED else 3, color(t("disk", size=size(free)), code))
+
+
+def power():
+    if sys.platform != "darwin":
+        return {}
+    info = {"low_power": bool(re.search(r"^\s*lowpowermode\s+1\b", run(["pmset", "-g"]), re.M))}
+    therm = run(["pmset", "-g", "therm"])
+    m = re.search(r"CPU_Speed_Limit\s*=\s*(\d+)", therm)
+    if m and int(m.group(1)) < 100:
+        info["cpu_limit"] = int(m.group(1))
+    m = re.search(r"thermal warning level set to (\d+)", therm, re.I)
+    if m and int(m.group(1)) > 0:
+        info["hot"] = True
+    m = re.search(r"(\d+)%;\s*discharging", run(["pmset", "-g", "batt"]))
+    if m:
+        info["battery"] = int(m.group(1))
+    return info
+
+
+def power_parts(p):
+    parts = []
+    if p.get("cpu_limit"):
+        parts.append((2, color(t("cpu_limit", n=p["cpu_limit"]), RED if p["cpu_limit"] < 50 else YELLOW)))
+    elif p.get("hot"):
+        parts.append((2, color(t("hot"), YELLOW)))
+    if p.get("low_power"):
+        parts.append((2, color(t("low_power"), YELLOW)))
+    battery = p.get("battery")
+    if isinstance(battery, int) and battery <= 20:
+        parts.append((2, color(t("battery", n=battery), RED if battery <= 10 else YELLOW)))
+    return parts
 
 
 def machine():
@@ -788,6 +823,7 @@ def work_line(d):
         parts.append((2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code)))
         if m["swap"] >= 0.5 * GB:
             parts.append((2 if code else 5, color(t("swap", size=gb(m["swap"])), code)))
+    parts += power_parts(cached("power", 30, power))
     part = disk_part(cached("disk", 30, disk_free))
     if part:
         parts.append(part)
