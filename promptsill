@@ -10,7 +10,7 @@ import sys
 import time
 from urllib.parse import quote
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 HOME = os.path.expanduser("~")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "promptsill")
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "promptsill")
