@@ -23,6 +23,7 @@ MB = 1048576
 DIM, YELLOW, RED, GREEN, CYAN = "2", "33", "31", "32", "36"
 COLORS = {"green": GREEN, "yellow": YELLOW, "red": RED, "cyan": CYAN, "dim": DIM}
 MISS_SHOWN = 300
+DISK_LOW = 15 * GB
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400, "daily": 86400, "weekly": 7 * 86400, "monthly": 30 * 86400}
 OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
 
@@ -40,7 +41,7 @@ TEXT = {
         "not_pushed": "not pushed", "busy": ":{port} taken: {owner}",
         "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
-        "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
+        "disk": "disk {size} free", "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
         "waits_1": "{names} waits for you", "waits_2": "{names} wait for you", "waits_n": "{n} sessions wait for you",
         "done_1": "{names} done", "done_2": "{names} done", "done_n": "{n} sessions done",
@@ -60,7 +61,7 @@ TEXT = {
         "not_pushed": "не запушена", "busy": ":{port} занят: {owner}",
         "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
-        "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
+        "disk": "на диске {size}", "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
         "waits_1": "{names} ждет тебя", "waits_2": "{names} ждут тебя", "waits_n": "ждут тебя: {n}",
         "done_1": "{names} закончила", "done_2": "{names} закончили", "done_n": "закончили: {n}",
@@ -190,6 +191,20 @@ def processes():
         elif re.search(r"/qemu-system-\w+", cmd):
             emulator = True
     return {"gradle": gradle, "kotlin": kotlin, "daemon_mem": daemon_mem, "sims": sims, "emulator": emulator}
+
+
+def disk_free():
+    try:
+        return shutil.disk_usage(HOME).free
+    except OSError:
+        return None
+
+
+def disk_part(free):
+    if not isinstance(free, (int, float)) or free >= DISK_LOW:
+        return None
+    code = RED if free < DISK_LOW / 3 else YELLOW
+    return (2 if code == RED else 3, color(t("disk", size=size(free)), code))
 
 
 def machine():
@@ -729,6 +744,9 @@ def work_line(d):
         parts.append((2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code)))
         if m["swap"] >= 0.5 * GB:
             parts.append((2 if code else 5, color(t("swap", size=gb(m["swap"])), code)))
+    part = disk_part(cached("disk", 30, disk_free))
+    if part:
+        parts.append(part)
     builds = kinds & {"mobile", "jvm"}
     names = daemon_names(m.get("gradle", 0), m.get("kotlin", 0))
     if names and (builds or tight or m["daemon_mem"] >= 1.5 * GB):
