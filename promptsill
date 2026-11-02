@@ -23,12 +23,12 @@ MB = 1048576
 DIM, YELLOW, RED, GREEN, CYAN = "2", "33", "31", "32", "36"
 COLORS = {"green": GREEN, "yellow": YELLOW, "red": RED, "cyan": CYAN, "dim": DIM}
 MISS_SHOWN = 300
-WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
+WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400, "daily": 86400, "weekly": 7 * 86400, "monthly": 30 * 86400}
 OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
 
 TEXT = {
     "en": {
-        "context": "context", "five_hour": "5h", "seven_day": "week", "resets": "resets {when}",
+        "context": "context", "five_hour": "5h", "spend_limit": "spend", "seven_day": "week", "resets": "resets {when}",
         "runs_out": "runs out {when}", "in_min": "in {n} min", "at": "at {hm}",
         "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "cache_left": "cache {left}", "cache_gone": "cache expired", "cache_cost": "{n} tokens",
@@ -45,7 +45,8 @@ TEXT = {
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
     },
     "ru": {
-        "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
+        "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
+        "resets": "сброс {when}",
         "runs_out": "кончится {when}", "in_min": "через {n} мин", "at": "в {hm}",
         "days": ["пн", "вт", "ср", "чт", "пт", "сб", "вс"],
         "cache_left": "кэш {left}", "cache_gone": "кэш истёк", "cache_cost": "{n} токенов",
@@ -425,10 +426,14 @@ def limit_part(key, lim, now):
     pct = lim.get("used_percentage")
     if not isinstance(pct, (int, float)):
         return None
-    p = pace(lim, WINDOWS[key], now)
+    window = WINDOWS.get(key) or WINDOWS.get(lim.get("period"))
+    p = pace(lim, window, now) if window else None
     code = pace_level(pct, p)
     label = color(t(key), code)
-    number = color(f"{pct:.0f}%" + (f" +{p['ahead']:.0f}%" if p and code else ""), code)
+    used, cap = lim.get("used_usd"), lim.get("limit_usd")
+    amount = (f"${used:.0f}/${cap:.0f}" if isinstance(used, (int, float)) and isinstance(cap, (int, float))
+              else f"{pct:.0f}%")
+    number = color(amount + (f" +{p['ahead']:.0f}%" if p and code else ""), code)
     head = f"{label} {bar(pct, code)} {number}" if key == "five_hour" else f"{label} {number}"
     extra = []
     if p and code and p["runs_out"]:
@@ -555,7 +560,7 @@ def claude_line(d, now=None):
         number = color(f"{ctx:.0f}%", code)
         parts.append((1, f"{label} {bar(ctx, code)} {number}", f"{label} {number}"))
     limits = d.get("rate_limits") or {}
-    for key in ("five_hour", "seven_day"):
+    for key in ("five_hour", "seven_day", "spend_limit"):
         part = limit_part(key, limits.get(key) or {}, now)
         if part:
             parts.append(part)
