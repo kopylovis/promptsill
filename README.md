@@ -32,6 +32,7 @@ The second line is about the project you're in and the machine it runs on. Each 
 - **Remote Control.** `remote control` while the session is reachable from claude.ai or the Claude app, clickable to open it there. Claude Code doesn't pass this to status lines, so promptsill reads it from Claude Code's own session files in `~/.claude/sessions/`. That's an internal format; if a future version changes it, the label just stops appearing.
 - **Your other sessions.** `kcalm waits for you` when another Claude Code session on this machine is stuck on a permission prompt or a question, and `authmeister done` for ten minutes after one finishes its turn. Three or more are counted: `3 sessions wait for you`. This also comes from `~/.claude/sessions/`.
 - **Git branch** with commits ahead and behind, `not pushed` and the number of changed files. It's clickable: it opens the pull request when one is open, otherwise the branch page. Next to it, `approved` or `changes requested` once the pull request has a review, and `worktree` when the session runs in a linked git worktree.
+- **Unfinished git operations.** `rebasing 3/7, conflicts 2` in the middle of a rebase, and likewise `merging`, `cherry-picking`, `reverting` or `bisecting`. During a rebase the branch shows its own name instead of `(detached)`.
 
 When the terminal is narrow, promptsill shortens the parts first, then drops the least important ones. The limits, context and branch stay.
 
