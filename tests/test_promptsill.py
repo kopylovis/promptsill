@@ -377,6 +377,22 @@ class OtherSessions(unittest.TestCase):
         self.assertEqual(self.texts([s]), ["x waits for you"])
 
 
+class Disk(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def test_only_when_low(self):
+        self.assertIsNone(ps.disk_part(100 * ps.GB))
+        self.assertIsNone(ps.disk_part(None))
+        part = ps.disk_part(12 * ps.GB)
+        self.assertEqual(plain(part[1]), "disk 12.0 GB free")
+        self.assertIn(ESC + "[33m", part[1])
+        self.assertIn(ESC + "[31m", ps.disk_part(3 * ps.GB)[1])
+
+    def test_reads_home(self):
+        self.assertGreater(ps.disk_free(), 0)
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform
