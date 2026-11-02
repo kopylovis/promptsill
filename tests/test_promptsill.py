@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -342,6 +343,55 @@ class RemoteControl(unittest.TestCase):
         self.assertEqual(plain(part[1]), "remote control")
         self.assertIn("https://claude.ai/code/session_01ABC", part[1])
         self.assertEqual(plain(part[2]), "RC")
+
+
+class Proxy(unittest.TestCase):
+    NAMES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "PROMPTSILL_PROXY_LABEL")
+
+    def setUp(self):
+        reset_opts()
+        self.saved = {k: os.environ.pop(k, None) for k in self.NAMES}
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+    def test_no_proxy(self):
+        self.assertIsNone(ps.proxy_part())
+
+    def test_target_parsing(self):
+        os.environ["https_proxy"] = "http://user:pw@corp.example:8080"
+        self.assertEqual(ps.proxy_target(), ("corp.example", 8080))
+        os.environ["ALL_PROXY"] = "socks5h://[::1]:1080"
+        del os.environ["https_proxy"]
+        self.assertEqual(ps.proxy_target(), ("::1", 1080))
+
+    def test_label_and_remote_proxy(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ\x1b[31m"
+        part = ps.proxy_part()
+        self.assertEqual(plain(part[1]), "proxy KZ31m")
+        self.assertIn(ESC + "[32m", part[1])
+
+    def test_local_proxy_down_and_up(self):
+        with socket.socket() as srv:
+            srv.bind(("127.0.0.1", 0))
+            srv.listen(1)
+            port = srv.getsockname()[1]
+            os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{port}"
+            os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+            real = ps.cached
+            ps.cached = lambda name, ttl, fn: fn()
+            try:
+                self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+                srv.close()
+                part = ps.proxy_part()
+            finally:
+                ps.cached = real
+        self.assertEqual(plain(part[1]), "proxy KZ down")
+        self.assertEqual(part[0], 1)
 
 
 class OtherSessions(unittest.TestCase):
