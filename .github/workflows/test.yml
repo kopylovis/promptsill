@@ -12,7 +12,7 @@ jobs:
       matrix:
         include:
           # No macOS: on a free account its jobs waited up to 15 minutes for a runner and got cancelled.
-          # The macOS-only code (vm_stat, pmset) is tested with faked command output.
+          # The pmset parsing is tested with faked output, so it runs here too.
           - os: ubuntu-latest
             python: "3.x"
           # ubuntu-latest images no longer have Python 3.9.
