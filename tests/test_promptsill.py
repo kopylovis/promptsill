@@ -393,6 +393,51 @@ class Disk(unittest.TestCase):
         self.assertGreater(ps.disk_free(), 0)
 
 
+class GitState(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+        self.git_dir = tempfile.mkdtemp(dir=TMP)
+
+    def write(self, *path, text=""):
+        full = os.path.join(self.git_dir, *path)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w") as f:
+            f.write(text)
+
+    def test_nothing_in_progress(self):
+        self.assertIsNone(ps.git_op(self.git_dir))
+        self.assertIsNone(ps.git_op(None))
+        self.assertIsNone(ps.op_part(None, {"conflicts": 0}))
+
+    def test_rebase_with_conflicts(self):
+        self.write("rebase-merge", "head-name", text="refs/heads/feat\n")
+        self.write("rebase-merge", "msgnum", text="3\n")
+        self.write("rebase-merge", "end", text="7\n")
+        op = ps.git_op(self.git_dir)
+        self.assertEqual(op, {"op": "rebase", "branch": "feat", "step": "3/7"})
+        g = {"branch": "(detached)", "ahead": 0, "behind": 0, "upstream": False, "changed": 2, "conflicts": 2}
+        self.assertEqual(plain(ps.op_part(op, g)[1]), "rebasing 3/7, conflicts 2")
+        self.assertIn(ESC + "[31m", ps.op_part(op, g)[1])
+        self.assertTrue(plain(ps.branch_part(g, {"repo": None}, {}, op)[1]).startswith("feat ±2"))
+
+    def test_merge(self):
+        self.write("MERGE_HEAD", text="abc\n")
+        op = ps.git_op(self.git_dir)
+        self.assertEqual(plain(ps.op_part(op, {"conflicts": 0})[1]), "merging")
+        reset_opts(lang="ru")
+        self.assertEqual(plain(ps.op_part(op, {"conflicts": 1})[1]), "слияние, конфликты 1")
+
+    def test_conflict_lines_counted(self):
+        out = "# branch.head main\n1 .M N... 100644 100644 100644 a b f\nu UU N... 100644 100644 100644 100644 a b c g\n"
+        real = ps.run
+        ps.run = lambda cmd, **kw: out
+        try:
+            g = ps.git("/x")
+        finally:
+            ps.run = real
+        self.assertEqual((g["changed"], g["conflicts"]), (2, 1))
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform
