@@ -29,6 +29,7 @@ DEMO = {
 }
 DATA = {
     "model": {"display_name": "Opus"},
+    "effort": {"level": "high"},
     "workspace": {"current_dir": "/work/shop"},
     "context_window": {"used_percentage": 42},
     "rate_limits": {"five_hour": {"used_percentage": 63, "resets_at": NOW + 3 * 3600},
