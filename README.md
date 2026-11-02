@@ -2,17 +2,19 @@
 
 A status line for [Claude Code](https://code.claude.com) that knows about your dev machine, not just your session.
 
-![promptsill status line: model, context bar, 5-hour limit with pace, weekly limit, cache timer; branch, dev server, busy port, node version, memory, Gradle, simulators](docs/preview-en.svg)
+![promptsill status line: model with effort, Remote Control, context bar, 5-hour limit with pace, weekly limit, cache timer, a session waiting for you; branch, dev server, busy port, node version, memory, swap, Gradle and Kotlin daemons, simulators](docs/preview-en.svg)
 
 ```text
-Opus high · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
-checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · Gradle 1 + Kotlin 1 (1.9 GB)
+Opus high · remote control · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s · kcalm waits for you
+checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · swap 2.1 GB · Gradle 1 + Kotlin 1 (1.9 GB)
 ```
 
 ## What it shows that others don't
 
-The second line is about the project you're in and the machine it runs on. Each part appears only when it has something to say:
+The second line is about the project you're in and the machine it runs on. Apart from the branch, each part appears only when it has something to say:
 
+- **Git branch** with commits ahead and behind, `not pushed` and the number of changed files. It's clickable: it opens the pull request when one is open, otherwise the branch page. Next to it, `approved` or `changes requested` once the pull request has a review, and `worktree` when the session runs in a linked git worktree.
+- **Unfinished git operations.** `rebasing 3/7, conflicts 2` in the middle of a rebase, and likewise `merging`, `cherry-picking`, `reverting` or `bisecting`. During a rebase the branch shows its own name instead of `(detached)`.
 - **Your dev servers.** `vite :5173` when this project's server is running, clickable to open it in the browser.
 - **Busy ports.** `:3000 taken: api` when the port your project needs is held by another folder's server.
 - **Node version.** `node 20, need 22 (.nvmrc)` when the active `node` doesn't match `.nvmrc`, `.node-version` or `engines`.
@@ -25,15 +27,15 @@ The second line is about the project you're in and the machine it runs on. Each 
 
 ## The Claude part
 
-- **Model, effort and fast mode**: `Opus xhigh fast`. On a narrow terminal only the model name stays.
+The first line is about Claude Code itself.
+
+- **Model, effort and fast mode.** `Opus xhigh fast`. On a narrow terminal only the model name stays.
 - **Context** as a bar with 1/8-cell precision.
 - **Limit pace.** For the 5-hour and weekly limits, promptsill compares how much you've used with how much of the window has passed. 60% in the first hour of five is a problem; 60% in the last hour is fine. Colors follow the pace, not the raw percentage. `+23%` means you're 23 points ahead of an even pace, and `runs out at 15:10` says when you'll hit the limit if you keep going like this.
 - **Spend limit** behind a Claude gateway that sets one: `spend $12/$50`, or a percentage when the gateway doesn't report dollars. Colored by the same pace as the other limits when the gateway says whether the period is a day, a week or a month.
 - **Prompt cache timer.** `cache 44s` shortly before the cache expires, and `cache expired (184k tokens)` after it has. The next message after expiry re-reads the whole conversation, here 184k tokens, which costs more of your limit; from 100k up it turns yellow. When the cache was rebuilt for another reason, promptsill says why for five minutes: `cache reset: tools changed`, `system prompt changed`, `model changed`, `history rewritten` or `server side`.
 - **Remote Control.** `remote control` while the session is reachable from claude.ai or the Claude app, clickable to open it there. Claude Code doesn't pass this to status lines, so promptsill reads it from Claude Code's own session files in `~/.claude/sessions/`. That's an internal format; if a future version changes it, the label just stops appearing.
 - **Your other sessions.** `kcalm waits for you` when another Claude Code session on this machine is stuck on a permission prompt or a question, and `authmeister done` for ten minutes after one finishes its turn. Three or more are counted: `3 sessions wait for you`. This also comes from `~/.claude/sessions/`.
-- **Git branch** with commits ahead and behind, `not pushed` and the number of changed files. It's clickable: it opens the pull request when one is open, otherwise the branch page. Next to it, `approved` or `changes requested` once the pull request has a review, and `worktree` when the session runs in a linked git worktree.
-- **Unfinished git operations.** `rebasing 3/7, conflicts 2` in the middle of a rebase, and likewise `merging`, `cherry-picking`, `reverting` or `bisecting`. During a rebase the branch shows its own name instead of `(detached)`.
 
 When the terminal is narrow, promptsill shortens the parts first, then drops the least important ones. The limits, context and branch stay.
 
@@ -64,7 +66,7 @@ chmod +x ~/.local/bin/promptsill
 promptsill install
 ```
 
-promptsill is a single Python file with no dependencies. It needs `python3` 3.9 or newer, and uses `git`, `lsof` and `ps` when they're available. The cache timer needs Claude Code 2.1.251 or newer; everything else works with older versions.
+promptsill is a single Python file with no dependencies. It needs `python3` 3.9 or newer, and uses `git`, `lsof`, `ps` and, on macOS, `pmset` when they're available. The cache timer needs Claude Code 2.1.251 or newer; everything else works with older versions.
 
 ## Commands
 
@@ -93,7 +95,7 @@ Optional `~/.config/promptsill/config.json`:
 }
 ```
 
-- `links`: clickable branch and dev server links ([OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda); iTerm2, Kitty, WezTerm, Ghostty and others).
+- `links`: clickable links on the branch, review state, dev servers, Remote Control and badges ([OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda); iTerm2, Kitty, WezTerm, Ghostty and others, usually with Cmd-click or Ctrl-click; macOS Terminal doesn't support them).
 - `color`: `false` turns colors off; so does the `NO_COLOR` environment variable.
 - `ascii`: `[##---]` bars for fonts without block characters; also `PROMPTSILL_ASCII=1`.
 
@@ -126,7 +128,7 @@ Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool'
 
 ## Privacy
 
-promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files and Claude Code's list of running sessions, runs `git status`, `lsof` and `ps`, and keeps a few seconds of cache in `~/.cache/promptsill`.
+promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files and Claude Code's list of running sessions, runs `git status`, `lsof`, `ps` and `pmset`, and keeps a few seconds of cache in `~/.cache/promptsill`.
 
 ## Development
 
