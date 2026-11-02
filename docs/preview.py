@@ -23,13 +23,15 @@ DEMO = {
     "listeners": [{"pid": "1", "ports": [5173], "cwd": "/work/shop", "name": "vite"},
                   {"pid": "2", "ports": [3000], "cwd": "/work/api", "name": "node"}],
     "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
-    "sessions": [],
+    "sessions": [{"sessionId": "demo", "bridgeSessionId": "session_01demo", "status": "busy"},
+                 {"sessionId": "other", "name": "kcalm", "status": "waiting"}],
     "disk": 200 * ps.GB,
     "power": {},
     "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
                 "daemon_mem": 1.9 * ps.GB, "sims": 1, "emulator": False},
 }
 DATA = {
+    "session_id": "demo",
     "model": {"display_name": "Opus"},
     "effort": {"level": "high"},
     "workspace": {"current_dir": "/work/shop"},
