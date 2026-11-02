@@ -37,7 +37,7 @@ TEXT = {
         "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
-        "fast": "fast",
+        "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "seven_day": "неделя", "resets": "сброс {when}",
@@ -50,7 +50,7 @@ TEXT = {
         "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
-        "fast": "fast",
+        "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
     },
 }
 
@@ -577,6 +577,24 @@ def branch_part(g, proj, d):
     return (1, color(link(text, url), YELLOW if g["ahead"] >= 5 or g["changed"] >= 20 else GREEN))
 
 
+def worktree_part(d, g):
+    name = (d.get("worktree") or {}).get("name") or (d.get("workspace") or {}).get("git_worktree")
+    if not isinstance(name, str) or not name:
+        return None
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name)[:40]
+    text = t("worktree") if g and name == g.get("branch") else f"{t('worktree')} {name}"
+    return (2, color(text, CYAN))
+
+
+def review_part(d):
+    pr = d.get("pr") or {}
+    state = pr.get("review_state")
+    if state not in ("approved", "changes_requested"):
+        return None
+    url = pr.get("url") if isinstance(pr.get("url"), str) else None
+    return (2, color(link(t(state), url), GREEN if state == "approved" else RED))
+
+
 def inside(cwd, root):
     return cwd == root or cwd.startswith(root.rstrip("/") + "/")
 
@@ -620,8 +638,14 @@ def work_line(d):
     proj = cached("project-" + cwd, 30, lambda: project(cwd))
     kinds = set(proj["kinds"])
     g = cached("git-" + cwd, 3, lambda: git(cwd))
+    part = worktree_part(d, g)
+    if part:
+        parts.append(part)
     if g and g.get("branch"):
         parts.append(branch_part(g, proj, d))
+    part = review_part(d)
+    if part:
+        parts.append(part)
     parts += badges(d, cwd)
     if "web" in kinds:
         parts += dev_parts(proj)

@@ -213,6 +213,24 @@ class Links(unittest.TestCase):
         reset_opts(links=False)
         self.assertNotIn(ESC + "]8", ps.branch_part(g, {"repo": "https://github.com/a/b"}, d)[1])
 
+    def test_review_state(self):
+        reset_opts()
+        d = {"pr": {"number": 7, "url": "https://github.com/a/b/pull/7", "review_state": "changes_requested"}}
+        part = ps.review_part(d)
+        self.assertEqual(plain(part[1]), "changes requested")
+        self.assertIn(ESC + "[31m", part[1])
+        self.assertIn("pull/7", part[1])
+        self.assertEqual(plain(ps.review_part({"pr": {"review_state": "approved"}})[1]), "approved")
+        self.assertIsNone(ps.review_part({"pr": {"review_state": "pending"}}))
+        self.assertIsNone(ps.review_part({}))
+
+    def test_worktree(self):
+        reset_opts()
+        g = {"branch": "feat-x"}
+        self.assertEqual(plain(ps.worktree_part({"worktree": {"name": "feat-x"}}, g)[1]), "worktree")
+        self.assertEqual(plain(ps.worktree_part({"workspace": {"git_worktree": "wt2"}}, g)[1]), "worktree wt2")
+        self.assertIsNone(ps.worktree_part({"workspace": {}}, g))
+
     def test_repo_from_claude_json(self):
         d = {"workspace": {"repo": {"host": "github.com", "owner": "o", "name": "r"}}}
         self.assertEqual(ps.repo_url(d, {"repo": None}), "https://github.com/o/r")
