@@ -15,6 +15,7 @@ ps = importlib.util.module_from_spec(spec)
 loader.exec_module(ps)
 
 NOW = 1_791_381_600
+ps.BADGES = os.path.join(ROOT, "docs", "no-badges")
 DEMO = {
     "project": {"root": "/work/shop", "kinds": ["web", "mobile"], "ports": [3000, 5173], "node_dir": "/work/shop",
                 "repo": "https://github.com/acme/shop"},
@@ -22,7 +23,7 @@ DEMO = {
     "listeners": [{"pid": "1", "ports": [5173], "cwd": "/work/shop", "name": "vite"},
                   {"pid": "2", "ports": [3000], "cwd": "/work/api", "name": "node"}],
     "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
-    "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "daemons": 2,
+    "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
                 "daemon_mem": 1.9 * ps.GB, "sims": 1, "emulator": False},
 }
 DATA = {

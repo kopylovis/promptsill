@@ -6,7 +6,7 @@ A status line for [Claude Code](https://code.claude.com) that knows about your d
 
 ```text
 Opus · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
-checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · Gradle 2 (1.9 GB)
+checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · Gradle 1 + Kotlin 1 (1.9 GB)
 ```
 
 ## What it shows that others don't
@@ -17,7 +17,7 @@ The second line is about the project you're in and the machine it runs on. Each 
 - **Busy ports.** `:3000 taken: api` when the port your project needs is held by another folder's server.
 - **Node version.** `node 20, need 22 (.nvmrc)` when the active `node` doesn't match `.nvmrc`, `.node-version` or `engines`.
 - **Memory pressure** on macOS. Used memory and swap, yellow or red when free memory runs low or swap grows.
-- **Gradle and Kotlin daemons** with the RAM they hold, in JVM and Android projects or whenever memory is tight.
+- **Gradle and Kotlin daemons**, counted separately, with the RAM they hold together: `Gradle 2 + Kotlin 1 (1.9 GB)`. Shown in JVM and Android projects, or anywhere when memory is tight or the daemons hold 1.5 GB or more.
 - **iOS simulators and the Android emulator** in mobile projects, so you notice the ones you forgot to close.
 - **A huge session file**, from 50 MB up.
 
