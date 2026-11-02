@@ -4,6 +4,7 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -45,6 +46,7 @@ TEXT = {
         "battery": "battery {n}%", "disk": "disk {size} free",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB", "remote": "remote control", "remote_short": "RC",
+        "proxy": "proxy", "proxy_down": "down",
         "rebase": "rebasing", "merge": "merging", "cherry_pick": "cherry-picking", "revert": "reverting",
         "bisect": "bisecting", "conflicts": "conflicts {n}",
         "waits_1": "{names} waits for you", "waits_2": "{names} wait for you", "waits_n": "{n} sessions wait for you",
@@ -69,6 +71,7 @@ TEXT = {
         "battery": "батарея {n}%", "disk": "на диске {size}",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ", "remote": "remote control", "remote_short": "RC",
+        "proxy": "прокси", "proxy_down": "не отвечает",
         "rebase": "rebase", "merge": "слияние", "cherry_pick": "cherry-pick", "revert": "revert",
         "bisect": "bisect", "conflicts": "конфликты {n}",
         "waits_1": "{names} ждет тебя", "waits_2": "{names} ждут тебя", "waits_n": "ждут тебя: {n}",
@@ -567,6 +570,38 @@ def cache_part(cache, now):
     return None
 
 
+def proxy_target():
+    """The proxy this session's network goes through, from the environment Claude Code passes on to us."""
+    for name in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        value = os.environ.get(name)
+        if value:
+            m = re.match(r"^(?:\w+://)?(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)(?::(\d+))?", value)
+            if m:
+                return m.group(1).strip("[]"), int(m.group(2)) if m.group(2) else None
+    return None
+
+
+def proxy_up(host, port):
+    try:
+        with socket.create_connection((host, port), timeout=0.3):
+            return True
+    except OSError:
+        return False
+
+
+def proxy_part():
+    target = proxy_target()
+    if not target:
+        return None
+    label = re.sub(r"[^\w .:-]", "", os.environ.get("PROMPTSILL_PROXY_LABEL", ""))[:20].strip()
+    text = t("proxy") + (f" {label}" if label else "")
+    host, port = target
+    if port and host in ("127.0.0.1", "localhost", "::1"):
+        if not cached(f"proxy-{port}", 5, lambda: proxy_up(host, port)):
+            return (1, color(f"{text} {t('proxy_down')}", RED))
+    return (2, color(text, GREEN))
+
+
 def claude_dir():
     return os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude"))
 
@@ -658,9 +693,9 @@ def claude_line(d, now=None):
     part = model_part(d)
     if part:
         parts.append(part)
-    part = remote_part(d)
-    if part:
-        parts.append(part)
+    for part in (remote_part(d), proxy_part()):
+        if part:
+            parts.append(part)
     ctx = (d.get("context_window") or {}).get("used_percentage")
     if isinstance(ctx, (int, float)):
         code = level(ctx, 60, 80)
