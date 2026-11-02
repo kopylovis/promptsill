@@ -2,6 +2,7 @@ name: test
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -9,12 +10,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
-        python: ["3.x"]
         include:
-          # Python 3.9 is the oldest we support; newer Ubuntu runner images no longer have it.
+          # macOS runners are scarce on free accounts: one job there, the oldest supported Python on Ubuntu.
           - os: macos-latest
-            python: "3.9"
+            python: "3.x"
+          - os: ubuntu-latest
+            python: "3.x"
+          # ubuntu-latest images no longer have Python 3.9.
           - os: ubuntu-24.04
             python: "3.9"
     runs-on: ${{ matrix.os }}
