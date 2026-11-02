@@ -203,6 +203,27 @@ class Links(unittest.TestCase):
         self.assertEqual(ps.repo_url(d, {"repo": None}), "https://github.com/o/r")
 
 
+class Daemons(unittest.TestCase):
+    def test_names(self):
+        self.assertEqual(ps.daemon_names(2, 1), "Gradle 2 + Kotlin 1")
+        self.assertEqual(ps.daemon_names(0, 1), "Kotlin 1")
+        self.assertEqual(ps.daemon_names(3, 0), "Gradle 3")
+        self.assertEqual(ps.daemon_names(0, 0), "")
+
+    def test_counts_from_ps(self):
+        out = ("2071552 /usr/bin/java -cp gradle-daemon-main-9.8.0.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.8.0\n"
+               "30000 /usr/bin/java -cp kotlin-daemon.jar org.jetbrains.kotlin.daemon.KotlinCompileDaemon\n"
+               "1000 /bin/zsh\n")
+        real = ps.run
+        ps.run = lambda cmd, **kw: out
+        try:
+            m = ps.processes()
+        finally:
+            ps.run = real
+        self.assertEqual((m["gradle"], m["kotlin"]), (1, 1))
+        self.assertEqual(m["daemon_mem"], (2071552 + 30000) * 1024)
+
+
 class Platform(unittest.TestCase):
     def test_memory_skipped_off_macos(self):
         real = ps.sys.platform

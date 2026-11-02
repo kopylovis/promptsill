@@ -34,7 +34,7 @@ TEXT = {
         "s": "{n}s", "m": "{n}m", "h": "{n}h",
         "not_pushed": "not pushed", "busy": ":{port} taken: {owner}",
         "no_node": "no node, need {need} ({source})", "node": "node {have}, need {need} ({source})",
-        "memory": "memory {used}/{total} GB", "swap": "swap {size}", "gradle": "Gradle {n} ({size})",
+        "memory": "memory {used}/{total} GB", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "simulators {n}", "emulator": "emulator", "session": "session file {size}",
         "GB": "GB", "MB": "MB",
     },
@@ -46,7 +46,7 @@ TEXT = {
         "s": "{n} с", "m": "{n} мин", "h": "{n} ч",
         "not_pushed": "не запушена", "busy": ":{port} занят: {owner}",
         "no_node": "нет node, нужна {need} ({source})", "node": "node {have}, нужна {need} ({source})",
-        "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "gradle": "Gradle {n} ({size})",
+        "memory": "память {used}/{total} ГБ", "swap": "swap {size}", "daemons": "{names} ({size})",
         "sims": "симуляторов {n}", "emulator": "эмулятор", "session": "файл сессии {size}",
         "GB": "ГБ", "MB": "МБ",
     },
@@ -160,18 +160,20 @@ def memory():
 
 
 def processes():
-    daemons = daemon_mem = sims = 0
+    gradle = kotlin = daemon_mem = sims = 0
     emulator = False
     for line in run(["ps", "-A", "-o", "rss=,command="]).splitlines():
         rss, _, cmd = line.strip().partition(" ")
-        if re.search(r"GradleDaemon|KotlinCompileDaemon|kotlin-daemon", cmd):
-            daemons += 1
+        is_gradle = "GradleDaemon" in cmd
+        if is_gradle or re.search(r"KotlinCompileDaemon|kotlin-daemon", cmd):
+            gradle += is_gradle
+            kotlin += not is_gradle
             daemon_mem += int(rss) * 1024 if rss.isdigit() else 0
         elif "launchd_sim" in cmd:
             sims += 1
         elif re.search(r"/qemu-system-\w+", cmd):
             emulator = True
-    return {"daemons": daemons, "daemon_mem": daemon_mem, "sims": sims, "emulator": emulator}
+    return {"gradle": gradle, "kotlin": kotlin, "daemon_mem": daemon_mem, "sims": sims, "emulator": emulator}
 
 
 def machine():
@@ -545,6 +547,10 @@ def badges(d, cwd, now=None):
     return parts
 
 
+def daemon_names(gradle, kotlin):
+    return " + ".join(f"{name} {n}" for name, n in (("Gradle", gradle), ("Kotlin", kotlin)) if n)
+
+
 def work_line(d):
     parts = []
     cwd = (d.get("workspace") or {}).get("current_dir") or d.get("cwd") or os.getcwd()
@@ -570,9 +576,10 @@ def work_line(d):
         if m["swap"] >= 0.5 * GB:
             parts.append((2 if code else 5, color(t("swap", size=gb(m["swap"])), code)))
     builds = kinds & {"mobile", "jvm"}
-    if m.get("daemons") and (builds or tight or m["daemon_mem"] >= 1.5 * GB):
+    names = daemon_names(m.get("gradle", 0), m.get("kotlin", 0))
+    if names and (builds or tight or m["daemon_mem"] >= 1.5 * GB):
         heavy = m["daemon_mem"] >= 1.5 * GB
-        parts.append((2 if heavy else 3, color(t("gradle", n=m["daemons"], size=size(m["daemon_mem"])),
+        parts.append((2 if heavy else 3, color(t("daemons", names=names, size=size(m["daemon_mem"])),
                                                YELLOW if heavy else "")))
     if "mobile" in kinds or tight:
         if m.get("sims"):
