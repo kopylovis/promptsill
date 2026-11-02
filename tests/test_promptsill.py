@@ -187,6 +187,28 @@ class Cache(unittest.TestCase):
         c = {"caching_observed": True, "warm": False, "ttl": "5m", "expires_at": None, "requests": 3}
         self.assertEqual(plain(ps.cache_part(c, 1000)[1]), "cache expired")
 
+    def test_expired_with_cost(self):
+        c = {"caching_observed": True, "warm": False, "expires_at": None, "requests": 3,
+             "recache_tokens_if_cold": 184000}
+        part = ps.cache_part(c, 1000)
+        self.assertEqual(plain(part[1]), "cache expired (184k tokens)")
+        self.assertIn(ESC + "[33m", part[1])
+        self.assertEqual(plain(part[2]), "cache expired")
+        c["recache_tokens_if_cold"] = 20000
+        self.assertIn(ESC + "[2m", ps.cache_part(c, 1000)[1])
+
+    def test_recent_miss_with_cause(self):
+        c = {"caching_observed": True, "warm": True, "ttl": "5m", "expires_at": 1000 + 250, "requests": 3,
+             "last_miss_at": 1000 - 30, "last_miss_cause": {"causes": ["tools_changed", "unknown"]}}
+        self.assertEqual(plain(ps.cache_part(c, 1000)[1]), "cache reset: tools changed")
+        reset_opts(lang="ru")
+        self.assertEqual(plain(ps.cache_part(c, 1000)[1]), "кэш сброшен: сменились инструменты")
+        reset_opts()
+        c["last_miss_at"] = 1000 - 600
+        self.assertIsNone(ps.cache_part(c, 1000))
+        c["last_miss_at"], c["last_miss_cause"] = 1000 - 30, {"causes": ["ttl_expired_5m"]}
+        self.assertIsNone(ps.cache_part(c, 1000))
+
     def test_no_caching(self):
         self.assertIsNone(ps.cache_part({"caching_observed": False}, 1000))
         self.assertIsNone(ps.cache_part(None, 1000))
