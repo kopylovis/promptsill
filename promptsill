@@ -57,6 +57,7 @@ TEXT = {
         "cache_hits": "cache hits {n}%", "cache_misses": "{n} misses",
         "update": "{v} installed, restart",
         "task_done": "done", "task_failed": "failed", "task_killed": "stopped",
+        "todo": "todo {done}/{total}",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
@@ -86,6 +87,7 @@ TEXT = {
         "cache_hits": "кэш попаданий {n}%", "cache_misses": "промахов {n}",
         "update": "стоит {v}, перезапусти",
         "task_done": "готово", "task_failed": "ошибка", "task_killed": "остановлен",
+        "todo": "задачи {done}/{total}",
     },
 }
 
@@ -796,6 +798,78 @@ def clean(value, limit=30):
     return re.sub(r"[\x00-\x1f\x7f]", "", value)[:limit].strip() if isinstance(value, str) else ""
 
 
+ACTIVITY_TAIL = 512 * 1024
+
+
+def tool_label(name, inp):
+    """Bash: make test, Edit promptsill, github: create_pull_request."""
+    inp = obj(inp)
+    if name.startswith("mcp__"):
+        server, _, tool = name[5:].partition("__")
+        return f"{server}: {tool}"
+    for key in ("description", "command", "file_path", "notebook_path", "pattern", "url", "query", "prompt"):
+        value = inp.get(key)
+        if isinstance(value, str) and value.strip():
+            value = os.path.basename(value) if key.endswith("_path") else value.strip().splitlines()[0]
+            return f"{name}: {value}"
+    return name
+
+
+def transcript_activity(path):
+    """The last TodoWrite list and the tool still waiting for its result, from the end of the transcript."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, size - ACTIVITY_TAIL))
+            chunk = f.read()
+    except (OSError, TypeError):
+        return {}
+    todos, pending, done_ids = None, None, set()
+    for raw in reversed(chunk.split(b"\n")):
+        if b'"tool_use"' not in raw and b'"tool_result"' not in raw:
+            continue
+        try:
+            entry = json.loads(raw)
+        except ValueError:
+            continue
+        content = obj(obj(entry).get("message")).get("content")
+        for block in reversed(content if isinstance(content, list) else []):
+            block = obj(block)
+            if block.get("type") == "tool_result":
+                done_ids.add(block.get("tool_use_id"))
+            elif block.get("type") == "tool_use":
+                name = str(block.get("name") or "")
+                if pending is None:
+                    pending = "" if block.get("id") in done_ids else tool_label(name, block.get("input"))
+                if todos is None and name == "TodoWrite":
+                    todos = obj(block.get("input")).get("todos")
+        if pending is not None and todos is not None:
+            break
+    out = {"tool": pending or ""}
+    if isinstance(todos, list) and todos:
+        items = [obj(x) for x in todos]
+        now_doing = next((x for x in items if x.get("status") == "in_progress"), {})
+        out["todo"] = {"done": sum(x.get("status") == "completed" for x in items), "total": len(items),
+                       "now": clean(str(now_doing.get("activeForm") or now_doing.get("content") or ""), 40)}
+    return out
+
+
+def activity_parts(d):
+    """What the session is doing right now: TodoWrite progress and the tool in flight."""
+    path = d.get("transcript_path")
+    if not isinstance(path, str) or not path:
+        return []
+    act = transcript_activity(path)
+    parts = []
+    todo = act.get("todo")
+    if todo and todo["done"] < todo["total"]:
+        text = t("todo", done=todo["done"], total=todo["total"])
+        parts.append((3, color(text + (f": {todo['now']}" if todo["now"] else ""), CYAN), color(text, CYAN)))
+    if act.get("tool"):
+        parts.append((4, color(clean(act["tool"], 50), DIM)))
+    return parts
+
+
 def name_part(d):
     """The session's name from --name, /rename or Claude's own title: tells parallel sessions apart."""
     name = clean(d.get("session_name"), 30)
@@ -928,6 +1002,7 @@ def claude_line(d, now=None):
         lambda: cache_health_part(d.get("prompt_cache")),
         lambda: others_parts(d, sessions, now),
         lambda: update_part(d),
+        lambda: activity_parts(d),
         lambda: work_done_parts(d),
     ])
 
