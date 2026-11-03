@@ -802,14 +802,27 @@ def obj(value):
     return value if isinstance(value, dict) else {}
 
 
+def short_tokens(n):
+    """84k, 420k, 1M, 1.2M: compact enough for both languages."""
+    if n < 10 ** 6:
+        return f"{n / 1000:.0f}k"
+    return f"{n / 10 ** 6:.1f}".rstrip("0").rstrip(".") + "M"
+
+
 def context_part(d):
-    ctx = obj(d.get("context_window")).get("used_percentage")
+    cw = obj(d.get("context_window"))
+    ctx = cw.get("used_percentage")
     if not isinstance(ctx, (int, float)):
         return None
     code = level(ctx, 60, 80)
     label = color(t("context"), code)
     number = color(f"{ctx:.0f}%", code)
-    return (1, f"{label} {bar(ctx, code)} {number}", f"{label} {number}")
+    # With a 1M window 42% is 420k tokens; the absolute numbers say how much room is really left.
+    used, size = cw.get("total_input_tokens"), cw.get("context_window_size")
+    amount = ""
+    if isinstance(used, (int, float)) and isinstance(size, (int, float)) and used > 0 and size > 0:
+        amount = " " + color(f"{short_tokens(used)}/{short_tokens(size)}", DIM)
+    return (1, f"{label} {bar(ctx, code)} {number}{amount}", f"{label} {number}")
 
 
 def claude_line(d, now=None):
