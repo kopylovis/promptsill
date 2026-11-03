@@ -56,6 +56,7 @@ TEXT = {
         "agent": "agent {name}", "style": "style {name}", "no_thinking": "thinking off",
         "cache_hits": "cache hits {n}%", "cache_misses": "{n} misses",
         "update": "{v} installed, restart",
+        "task_done": "done", "task_failed": "failed", "task_killed": "stopped",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
@@ -84,6 +85,7 @@ TEXT = {
         "agent": "агент {name}", "style": "стиль {name}", "no_thinking": "thinking выключен",
         "cache_hits": "кэш попаданий {n}%", "cache_misses": "промахов {n}",
         "update": "стоит {v}, перезапусти",
+        "task_done": "готово", "task_failed": "ошибка", "task_killed": "остановлен",
     },
 }
 
@@ -1293,10 +1295,18 @@ def install(opts):
     entry.update({"type": "command", "command": command})
     entry.setdefault("hideVimModeIndicator", True)  # promptsill shows the vim mode itself
     settings["statusLine"] = entry
+    sub = settings.get("subagentStatusLine")
+    sub_note = ""
+    if not sub or ours(sub):
+        settings["subagentStatusLine"] = dict(obj(sub), type="command", command=command + " subagents")
+    else:
+        sub_note = "  subagentStatusLine is someone else's; left as is."
     save_settings(path, settings)
     print(f"✓ statusLine in {tilde(path)} → {command}")
     if current and not ours(current):
         print("  The previous statusLine is saved; `promptsill uninstall` restores it.")
+    if sub_note:
+        print(sub_note)
     print("  It shows up on Claude Code's next refresh.")
     return 0
 
@@ -1306,7 +1316,14 @@ def uninstall(opts):
     settings = load_settings(path)
     if settings is None:
         return 1
+    dropped_sub = ours(settings.get("subagentStatusLine"))
+    if dropped_sub:
+        settings.pop("subagentStatusLine")
     if not ours(settings.get("statusLine")):
+        if dropped_sub:
+            save_settings(path, settings)
+            print(f"✓ removed subagentStatusLine from {tilde(path)}")
+            return 0
         print(f"No promptsill statusLine in {tilde(path)}; nothing to do")
         return 0
     previous = read_json(PREVIOUS)
@@ -1329,6 +1346,8 @@ USAGE = """promptsill — a status line for Claude Code
                                   set statusLine in ~/.claude/settings.json
   promptsill uninstall [--settings FILE]
                                   remove it and bring back the statusLine it replaced
+  promptsill subagents [--lang en|ru]
+                                  rows for the agent panel (subagentStatusLine), set up by install
   promptsill preview [--lang en|ru] [--width N]
                                   render sample data for the current folder
   promptsill badge set NAME TEXT [--color green|yellow|red|cyan|dim] [--session ID]
@@ -1428,6 +1447,91 @@ def update_part(d):
     return (3, color(t("update", v=installed), YELLOW))
 
 
+SPARKS = "▁▂▃▄▅▆▇█"
+
+
+def model_name(model_id):
+    """claude-sonnet-5-5 → Sonnet 5.5; anything else as it came."""
+    m = re.match(r"^claude-([a-z]+)-(\d+)(?:-(\d+))?", model_id or "")
+    if not m:
+        return clean(model_id, 24)
+    return m.group(1).title() + " " + m.group(2) + (f".{m.group(3)}" if m.group(3) and len(m.group(3)) <= 2 else "")
+
+
+def sparkline(samples):
+    nums = [x for x in samples if isinstance(x, (int, float))][-8:] if isinstance(samples, list) else []
+    if len(nums) < 2 or OPTS["ascii"]:
+        return ""
+    low, high = min(nums), max(nums)
+    if high == low:
+        return SPARKS[0] * len(nums)
+    return "".join(SPARKS[int((x - low) / (high - low) * (len(SPARKS) - 1))] for x in nums)
+
+
+def subagent_row(task, cols, now):
+    """One row of the agent panel: who, what it is doing, model, how long, how much context."""
+    who = clean(task.get("name") or task.get("agentType") or "", 24)
+    what = clean(task.get("label") or task.get("description") or "", 200)
+    status = task.get("status")
+    tail = []
+    if status in ("completed", "failed", "killed"):
+        key = {"completed": "task_done", "failed": "task_failed", "killed": "task_killed"}[status]
+        tail.append(color(t(key), GREEN if status == "completed" else RED))
+    model = model_name(task.get("model"))
+    effort = task.get("effort")
+    if model:
+        tail.append(color(model + (f" {effort}" if isinstance(effort, str) and re.match(r"^\w{1,10}$", effort)
+                                   else ""), CYAN))
+    start = task.get("startTime")
+    if isinstance(start, (int, float)) and status not in ("completed", "failed", "killed"):
+        tail.append(color(span(now - start / 1000), DIM))
+    count, size = task.get("tokenCount"), task.get("contextWindowSize")
+    if isinstance(count, (int, float)) and count > 0:
+        text = short_tokens(count)
+        code = ""
+        if isinstance(size, (int, float)) and size > 0:
+            pct = count / size * 100
+            code = level(pct, 60, 80)
+            text += f" {pct:.0f}%"
+        spark = sparkline(task.get("tokenSamples"))
+        tail.append((color(spark, DIM) + " " if spark else "") + color(text, code))
+    sep = color(SEP, DIM)
+    head = color(who, CYAN) if who else ""
+    fixed = visible(head) + sum(visible(x) + len(SEP) for x in tail) + (len(SEP) if head else 0)
+    room = (cols or 120) - fixed
+    while room < 10 and len(tail) > 1:
+        # narrow panel: drop the elapsed time and the model first, keep the context
+        dropped = tail.pop(-2) if len(tail) > 2 else tail.pop(0)
+        room += visible(dropped) + len(SEP)
+    if what and room >= 10:
+        what = what if len(what) <= room else what[:room - 1].rstrip() + "…"
+    else:
+        what = ""
+    return sep.join(x for x in [head, what] + tail if x)
+
+
+def subagents(stream):
+    """subagentStatusLine: rows for Claude Code's agent panel, one JSON line per task."""
+    try:
+        d = json.load(stream)
+    except ValueError:
+        return 0
+    if not isinstance(d, dict):
+        return 0
+    try:
+        cols = int(d.get("columns") or 0)
+    except (TypeError, ValueError):
+        cols = 0
+    now = time.time()
+    for task in d.get("tasks") or []:
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            continue
+        row = safe(lambda: subagent_row(task, cols, now))
+        if row:
+            print(json.dumps({"id": task["id"], "content": row}, ensure_ascii=False))
+    return 0
+
+
 def refresh(name):
     """The detached half of cached(background=True): recompute one cache entry and drop the lock."""
     kind, _, key = name.partition("-")
@@ -1471,6 +1575,8 @@ def main(argv):
     if cmd == "_refresh" and len(rest) == 2:
         return refresh(rest[1])
     configure(opts.get("lang"))
+    if cmd == "subagents":
+        return subagents(sys.stdin)
     if cmd == "preview":
         try:
             cols = int(opts.get("width") or 0) or columns()
