@@ -758,6 +758,29 @@ def clean(value, limit=30):
     return re.sub(r"[\x00-\x1f\x7f]", "", value)[:limit].strip() if isinstance(value, str) else ""
 
 
+def name_part(d):
+    """The session's name from --name, /rename or Claude's own title: tells parallel sessions apart."""
+    name = clean(d.get("session_name"), 30)
+    return (4, name) if name else None
+
+
+def work_done_parts(d):
+    """Lines added and removed and how long the session has run; the first to go on a narrow terminal."""
+    cost = obj(d.get("cost"))
+    parts = []
+    added, removed = cost.get("total_lines_added"), cost.get("total_lines_removed")
+    if isinstance(added, int) and isinstance(removed, int) and (added or removed):
+        parts.append((5, color(f"+{added}", GREEN) + " " + color(f"−{removed}" if OPTS["color"] or not OPTS["ascii"]
+                                                                   else f"-{removed}", RED)))
+    ms = cost.get("total_duration_ms")
+    if isinstance(ms, (int, float)) and ms >= 60000:
+        sec = int(ms // 1000)
+        text = span(sec) if sec < 3600 else t("h", n=sec // 3600) + (f" {t('m', n=sec % 3600 // 60)}"
+                                                                        if sec % 3600 >= 60 else "")
+        parts.append((5, color(text, DIM)))
+    return parts
+
+
 def mode_parts(d):
     """Only what differs from a plain session: vim mode, an --agent, a custom output style, thinking turned off."""
     parts = []
@@ -857,6 +880,7 @@ def claude_line(d, now=None):
     limits = obj(d.get("rate_limits"))
     return collect([
         lambda: model_part(d),
+        lambda: name_part(d),
         lambda: mode_parts(d),
         lambda: remote_part(d, sessions),
         proxy_part,
@@ -864,6 +888,7 @@ def claude_line(d, now=None):
         *(lambda key=key: limit_part(key, obj(limits.get(key)), now) for key in ("five_hour", "seven_day", "spend_limit")),
         lambda: cache_part(d.get("prompt_cache"), now),
         lambda: others_parts(d, sessions, now),
+        lambda: work_done_parts(d),
     ])
 
 
