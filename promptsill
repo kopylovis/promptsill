@@ -673,7 +673,7 @@ def live_sessions():
             continue
         try:
             os.kill(pid, 0)
-        except ProcessLookupError:
+        except (ProcessLookupError, OverflowError):
             continue
         except OSError:
             pass
@@ -1000,7 +1000,7 @@ def visible(text):
 def fit(parts, cols):
     parts = [(p[0], p[1], p[2] if len(p) > 2 else None) for p in parts]
     width = lambda ps: sum(visible(p[1]) for p in ps) + len(SEP) * max(0, len(ps) - 1)
-    limit = cols - 4 if cols else 0
+    limit = max(cols - 4, 1) if cols else 0
     if limit:
         for i in sorted(range(len(parts)), key=lambda i: (-parts[i][0], -i)):
             if width(parts) <= limit:
