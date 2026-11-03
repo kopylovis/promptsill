@@ -385,6 +385,27 @@ class CacheFiles(unittest.TestCase):
         self.assertTrue(os.path.exists(old))
 
 
+class CacheHealth(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def part(self, **kw):
+        cache = dict({"caching_observed": True, "requests": 14, "hit_ratio": 0.91, "misses": 0}, **kw)
+        p = ps.cache_health_part(cache)
+        return plain(p[1]) if p else None
+
+    def test_healthy_cache_is_quiet(self):
+        self.assertIsNone(self.part())
+        self.assertIsNone(self.part(misses=2))
+        self.assertIsNone(self.part(hit_ratio=0.3, requests=3))
+
+    def test_low_hits_or_many_misses(self):
+        self.assertEqual(self.part(hit_ratio=0.72, misses=2), "cache hits 72%, 2 misses")
+        self.assertEqual(self.part(misses=4), "cache hits 91%, 4 misses")
+        reset_opts(lang="ru")
+        self.assertEqual(self.part(hit_ratio=0.4), "кэш попаданий 40%")
+
+
 class Links(unittest.TestCase):
     def test_remote_to_web(self):
         self.assertEqual(ps.web_url("git@github.com:kopylovis/promptsill.git"), "https://github.com/kopylovis/promptsill")
