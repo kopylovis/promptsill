@@ -170,12 +170,50 @@ def prune(age=86400):
         pass
 
 
-def cached(name, ttl, fn):
+BACKGROUND = True
+STALE_SERVED = 600
+LOCK_AGE = 30
+
+
+def refresh_later(name, path):
+    """Start a detached `promptsill _refresh NAME` unless one is already at it."""
+    lock = path + ".lock"
+    for _ in range(2):
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(lock) < LOCK_AGE:
+                    return
+                os.remove(lock)
+            except OSError:
+                return
+        except OSError:
+            return
+    else:
+        return
+    try:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "_refresh", name], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+    except OSError:
+        try:
+            os.remove(lock)
+        except OSError:
+            pass
+
+
+def cached(name, ttl, fn, background=False):
+    """With background=True a value up to STALE_SERVED seconds old is returned at once and refreshed off the hot path."""
     path = cache_path(name)
     try:
-        if time.time() - os.path.getmtime(path) < ttl:
+        age = time.time() - os.path.getmtime(path)
+        if age < ttl or (background and BACKGROUND and age < ttl + STALE_SERVED):
             with open(path, encoding="utf-8") as f:
-                return json.load(f)
+                value = json.load(f)
+            if age >= ttl:
+                refresh_later(name, path)
+            return value
     except (OSError, ValueError):
         pass
     value = fn()
@@ -792,7 +830,7 @@ def claude_line(d, now=None):
 def dev_parts(proj):
     parts = []
     root = proj["root"]
-    servers = cached("listeners", 15, listeners)
+    servers = cached("listeners", 15, listeners, background=True)
     mine = [s for s in servers if inside(s["cwd"], root)]
     for s in mine:
         text = f"{s['name']} :{','.join(map(str, s['ports'][:2]))}"
@@ -911,7 +949,7 @@ def git_parts(d, proj, g):
 def web_parts(proj):
     parts = dev_parts(proj)
     if proj.get("node_dir"):
-        nc = cached("node-" + proj["node_dir"], 60, lambda: node_check(proj["node_dir"]))
+        nc = cached("node-" + proj["node_dir"], 60, lambda: node_check(proj["node_dir"]), background=True)
         if nc:
             parts.append((1, color(t(nc["key"], **{k: v for k, v in nc.items() if k != "key"}), YELLOW)))
     return parts
@@ -972,13 +1010,13 @@ def work_cwd(d):
 
 def work_line(d):
     cwd = work_cwd(d)
-    proj = obj(safe(lambda: cached("project-" + cwd, 30, lambda: project(cwd))))
+    proj = obj(safe(lambda: cached("project-" + cwd, 30, lambda: project(cwd), background=True)))
     proj.setdefault("root", cwd)
     for key in ("kinds", "ports"):
         proj[key] = proj.get(key) if isinstance(proj.get(key), list) else []
     kinds = set(proj["kinds"])
     g = obj(safe(lambda: cached("git-" + cwd, 3, lambda: git(cwd)))) or None
-    m = obj(safe(lambda: cached("machine", 15, machine)))
+    m = obj(safe(lambda: cached("machine", 15, machine, background=True)))
     return collect([
         lambda: worktree_part(d, g),
         lambda: git_parts(d, proj, g),
@@ -986,8 +1024,8 @@ def work_line(d):
         lambda: badges(d, cwd),
         lambda: web_parts(proj) if "web" in kinds else None,
         lambda: memory_parts(m),
-        lambda: power_parts(cached("power", 30, power)),
-        lambda: disk_part(cached("disk", 30, disk_free)),
+        lambda: power_parts(cached("power", 30, power, background=True)),
+        lambda: disk_part(cached("disk", 30, disk_free, background=True)),
         lambda: build_parts(m, kinds),
         lambda: session_file_part(d),
     ])
@@ -1264,6 +1302,25 @@ def parse(args):
     return opts, rest
 
 
+def refresh(name):
+    """The detached half of cached(background=True): recompute one cache entry and drop the lock."""
+    kind, _, key = name.partition("-")
+    makers = {"machine": machine, "listeners": listeners, "power": power, "disk": disk_free,
+              "project": lambda: project(key), "node": lambda: node_check(key)}
+    path = cache_path(name)
+    try:
+        if kind in makers:
+            write_json(path, makers[kind]())
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(path + ".lock")
+        except OSError:
+            pass
+    return 0
+
+
 def main(argv):
     try:
         sys.stdout.reconfigure(errors="replace")
@@ -1285,6 +1342,8 @@ def main(argv):
         return badge(opts, rest)
     if cmd == "_sync" and len(rest) == 2:
         return sync(rest[1])
+    if cmd == "_refresh" and len(rest) == 2:
+        return refresh(rest[1])
     configure(opts.get("lang"))
     if cmd == "preview":
         try:
