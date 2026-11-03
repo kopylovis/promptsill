@@ -406,6 +406,21 @@ class CacheHealth(unittest.TestCase):
         self.assertEqual(self.part(hit_ratio=0.4), "кэш попаданий 40%")
 
 
+class Update(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+        ps.write_json(ps.cache_path("claude"), "2.1.300")
+
+    def test_newer_install_asks_for_restart(self):
+        self.assertEqual(plain(ps.update_part({"version": "2.1.293"})[1]), "2.1.300 installed, restart")
+        self.assertIsNone(ps.update_part({"version": "2.1.300"}))
+        self.assertIsNone(ps.update_part({"version": "2.2.0"}))
+        self.assertIsNone(ps.update_part({}))
+
+    def test_version_order(self):
+        self.assertLess(ps.version_tuple("2.1.99"), ps.version_tuple("2.1.100"))
+
+
 class Links(unittest.TestCase):
     def test_remote_to_web(self):
         self.assertEqual(ps.web_url("git@github.com:kopylovis/promptsill.git"), "https://github.com/kopylovis/promptsill")

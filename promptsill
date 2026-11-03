@@ -55,6 +55,7 @@ TEXT = {
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
         "agent": "agent {name}", "style": "style {name}", "no_thinking": "thinking off",
         "cache_hits": "cache hits {n}%", "cache_misses": "{n} misses",
+        "update": "{v} installed, restart",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
@@ -82,6 +83,7 @@ TEXT = {
         "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
         "agent": "агент {name}", "style": "стиль {name}", "no_thinking": "thinking выключен",
         "cache_hits": "кэш попаданий {n}%", "cache_misses": "промахов {n}",
+        "update": "стоит {v}, перезапусти",
     },
 }
 
@@ -205,6 +207,20 @@ def refresh_later(name, path):
             os.remove(lock)
         except OSError:
             pass
+
+
+def peek(name, ttl):
+    """A cached value that is never computed on the hot path: missing or old, it is refreshed in the background."""
+    path = cache_path(name)
+    try:
+        age = time.time() - os.path.getmtime(path)
+        with open(path, encoding="utf-8") as f:
+            value = json.load(f)
+    except (OSError, ValueError):
+        age, value = None, None
+    if (age is None or age >= ttl) and BACKGROUND:
+        refresh_later(name, path)
+    return value
 
 
 def cached(name, ttl, fn, background=False):
@@ -909,6 +925,7 @@ def claude_line(d, now=None):
         lambda: cache_part(d.get("prompt_cache"), now),
         lambda: cache_health_part(d.get("prompt_cache")),
         lambda: others_parts(d, sessions, now),
+        lambda: update_part(d),
         lambda: work_done_parts(d),
     ])
 
@@ -1389,11 +1406,33 @@ def parse(args):
     return opts, rest
 
 
+def claude_version():
+    """The Claude Code installed now, from claude --version: about 300 ms of node, so only ever in the background."""
+    claude = shutil.which("claude")
+    m = re.match(r"\s*(\d+(?:\.\d+)+)", run([claude, "--version"], timeout=10)) if claude else None
+    return m.group(1) if m else None
+
+
+def version_tuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v)) if isinstance(v, str) else ()
+
+
+def update_part(d):
+    """Claude Code updated itself or was upgraded while this session runs: the new version needs a restart."""
+    running = d.get("version")
+    installed = peek("claude", 3600)
+    if not isinstance(running, str) or not isinstance(installed, str):
+        return None
+    if version_tuple(installed) <= version_tuple(running):
+        return None
+    return (3, color(t("update", v=installed), YELLOW))
+
+
 def refresh(name):
     """The detached half of cached(background=True): recompute one cache entry and drop the lock."""
     kind, _, key = name.partition("-")
     makers = {"machine": machine, "listeners": listeners, "power": power, "disk": disk_free,
-              "project": lambda: project(key), "node": lambda: node_check(key)}
+              "project": lambda: project(key), "node": lambda: node_check(key), "claude": claude_version}
     path = cache_path(name)
     try:
         if kind in makers:
