@@ -128,6 +128,26 @@ class Render(unittest.TestCase):
         self.assertEqual(plain(ps.fit([(1, linked), (2, "abc")], 20)), "main · abc")
 
 
+class Context(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def test_tokens_next_to_the_bar(self):
+        part = ps.context_part({"context_window": {"used_percentage": 42, "total_input_tokens": 420000,
+                                                   "context_window_size": 1000000}})
+        self.assertTrue(plain(part[1]).endswith("42% 420k/1M"), plain(part[1]))
+        self.assertEqual(plain(part[2]), "context 42%")
+
+    def test_without_token_counts(self):
+        part = ps.context_part({"context_window": {"used_percentage": 8, "total_input_tokens": 0,
+                                                   "context_window_size": 200000}})
+        self.assertTrue(plain(part[1]).endswith("8%"), plain(part[1]))
+
+    def test_short_tokens(self):
+        self.assertEqual([ps.short_tokens(n) for n in (15500, 200000, 1000000, 1250000)],
+                         ["16k", "200k", "1M", "1.2M"])
+
+
 class Model(unittest.TestCase):
     def setUp(self):
         reset_opts()
