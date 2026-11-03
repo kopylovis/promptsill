@@ -382,14 +382,14 @@ def project(cwd):
         if not os.path.isfile(pkg_path):
             continue
         pkg = read_json(pkg_path)
-        deps = {**(pkg.get("dependencies") or {}), **(pkg.get("devDependencies") or {})}
+        deps = {**obj(pkg.get("dependencies")), **obj(pkg.get("devDependencies"))}
         if not deps and not pkg.get("scripts"):
             continue
         kinds.add("web")
         node_dir = node_dir or os.path.join(root, sub)
         if "react-native" in deps or "expo" in deps:
             kinds.add("mobile")
-        scripts = " ".join(str(v) for k, v in (pkg.get("scripts") or {}).items() if k in ("dev", "start", "serve"))
+        scripts = " ".join(str(v) for k, v in obj(pkg.get("scripts")).items() if k in ("dev", "start", "serve"))
         m = re.search(r"(?:--port[ =]|-p\s+|PORT=)(\d{2,5})", scripts)
         if m:
             ports.append(int(m.group(1)))
@@ -442,7 +442,7 @@ def node_check(node_dir):
             want, source = ("=", int(m.group(1))), name
             break
     if not want:
-        engines = str((read_json(os.path.join(node_dir, "package.json")).get("engines") or {}).get("node") or "")
+        engines = str(obj(read_json(os.path.join(node_dir, "package.json")).get("engines")).get("node") or "")
         m = re.search(r"(>=|\^|~)?\s*v?(\d+)", engines)
         if m:
             want, source = (">=" if m.group(1) == ">=" else "=", int(m.group(2))), "engines"
@@ -583,7 +583,7 @@ def miss_part(cache, now):
     at = cache.get("last_miss_at")
     if not isinstance(at, (int, float)) or not 0 <= now - at <= MISS_SHOWN:
         return None
-    causes = (cache.get("last_miss_cause") or {}).get("causes") or []
+    causes = obj(cache.get("last_miss_cause")).get("causes") or []
     names = TEXT[OPTS["lang"]]["causes"]
     known = [names[c] for c in causes if isinstance(c, str) and c in names]
     if not known:
@@ -688,8 +688,8 @@ def remote_control(d, sessions):
     return bridge if isinstance(bridge, str) and re.match(r"^[\w-]{1,128}$", bridge) else None
 
 
-def remote_part(d):
-    bridge = remote_control(d, cached("sessions", 3, live_sessions))
+def remote_part(d, sessions=None):
+    bridge = remote_control(d, cached("sessions", 3, live_sessions) if sessions is None else sessions)
     if not bridge:
         return None
     url = f"https://claude.ai/code/{bridge}"
@@ -697,11 +697,11 @@ def remote_part(d):
 
 
 def model_part(d):
-    model = (d.get("model") or {}).get("display_name")
+    model = obj(d.get("model")).get("display_name")
     if not model:
         return None
     text = color(model, CYAN)
-    effort = (d.get("effort") or {}).get("level")
+    effort = obj(d.get("effort")).get("level")
     if isinstance(effort, str) and re.match(r"^\w{1,10}$", effort):
         text += " " + color(effort, CYAN)
     if d.get("fast_mode") is True:
@@ -734,31 +734,55 @@ def others_parts(d, sessions, now):
     return parts
 
 
+def collect(producers):
+    """Each part is built on its own: odd input or a failing command drops that part, not the whole line."""
+    parts = []
+    for make in producers:
+        try:
+            got = make()
+        except Exception:
+            continue
+        if isinstance(got, list):
+            parts += got
+        elif got:
+            parts.append(got)
+    return parts
+
+
+def safe(fn, default=None):
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
+def obj(value):
+    return value if isinstance(value, dict) else {}
+
+
+def context_part(d):
+    ctx = obj(d.get("context_window")).get("used_percentage")
+    if not isinstance(ctx, (int, float)):
+        return None
+    code = level(ctx, 60, 80)
+    label = color(t("context"), code)
+    number = color(f"{ctx:.0f}%", code)
+    return (1, f"{label} {bar(ctx, code)} {number}", f"{label} {number}")
+
+
 def claude_line(d, now=None):
     now = time.time() if now is None else now
-    parts = []
-    part = model_part(d)
-    if part:
-        parts.append(part)
-    for part in (remote_part(d), proxy_part()):
-        if part:
-            parts.append(part)
-    ctx = (d.get("context_window") or {}).get("used_percentage")
-    if isinstance(ctx, (int, float)):
-        code = level(ctx, 60, 80)
-        label = color(t("context"), code)
-        number = color(f"{ctx:.0f}%", code)
-        parts.append((1, f"{label} {bar(ctx, code)} {number}", f"{label} {number}"))
-    limits = d.get("rate_limits") or {}
-    for key in ("five_hour", "seven_day", "spend_limit"):
-        part = limit_part(key, limits.get(key) or {}, now)
-        if part:
-            parts.append(part)
-    part = cache_part(d.get("prompt_cache"), now)
-    if part:
-        parts.append(part)
-    parts += others_parts(d, cached("sessions", 3, live_sessions), now)
-    return parts
+    sessions = safe(lambda: cached("sessions", 3, live_sessions), [])
+    limits = obj(d.get("rate_limits"))
+    return collect([
+        lambda: model_part(d),
+        lambda: remote_part(d, sessions),
+        proxy_part,
+        lambda: context_part(d),
+        *(lambda key=key: limit_part(key, obj(limits.get(key)), now) for key in ("five_hour", "seven_day", "spend_limit")),
+        lambda: cache_part(d.get("prompt_cache"), now),
+        lambda: others_parts(d, sessions, now),
+    ])
 
 
 def dev_parts(proj):
@@ -781,7 +805,7 @@ def dev_parts(proj):
 
 
 def repo_url(d, proj):
-    repo = (d.get("workspace") or {}).get("repo") or {}
+    repo = obj(obj(d.get("workspace")).get("repo"))
     if repo.get("host") and repo.get("owner") and repo.get("name"):
         return f"https://{repo['host']}/{repo['owner']}/{repo['name']}"
     return proj.get("repo")
@@ -810,14 +834,14 @@ def branch_part(g, proj, d, op=None):
         text += f" ({t('not_pushed')})"
     if g["changed"]:
         text += f" ±{g['changed']}"
-    url = (d.get("pr") or {}).get("url")
+    url = obj(d.get("pr")).get("url")
     if not url and g["branch"] != "(detached)":
         url = branch_url(repo_url(d, proj), g["branch"], g["upstream"])
     return (1, color(link(text, url), YELLOW if g["ahead"] >= 5 or g["changed"] >= 20 else GREEN))
 
 
 def worktree_part(d, g):
-    name = (d.get("worktree") or {}).get("name") or (d.get("workspace") or {}).get("git_worktree")
+    name = obj(d.get("worktree")).get("name") or obj(d.get("workspace")).get("git_worktree")
     if not isinstance(name, str) or not name:
         return None
     name = re.sub(r"[\x00-\x1f\x7f]", "", name)[:40]
@@ -826,7 +850,7 @@ def worktree_part(d, g):
 
 
 def review_part(d):
-    pr = d.get("pr") or {}
+    pr = obj(d.get("pr"))
     state = pr.get("review_state")
     if state not in ("approved", "changes_requested"):
         return None
@@ -871,48 +895,48 @@ def daemon_names(gradle, kotlin):
     return " + ".join(f"{name} {n}" for name, n in (("Gradle", gradle), ("Kotlin", kotlin)) if n)
 
 
-def work_line(d):
+def git_parts(d, proj, g):
+    if not g:
+        return []
+    op = git_op(proj.get("git_dir"))
+    parts = [branch_part(g, proj, d, op)] if g.get("branch") else []
+    part = op_part(op, g)
+    return parts + [part] if part else parts
+
+
+def web_parts(proj):
+    parts = dev_parts(proj)
+    if proj.get("node_dir"):
+        nc = cached("node-" + proj["node_dir"], 60, lambda: node_check(proj["node_dir"]))
+        if nc:
+            parts.append((1, color(t(nc["key"], **{k: v for k, v in nc.items() if k != "key"}), YELLOW)))
+    return parts
+
+
+def memory_code(m):
+    if not m.get("total"):
+        return ""
+    free = m["total"] - m["used"]
+    return RED if free < GB or m["swap"] > 6 * GB else YELLOW if free < 2 * GB or m["swap"] > 3 * GB else ""
+
+
+def memory_parts(m):
+    if not m.get("total"):
+        return []
+    code = memory_code(m)
+    parts = [(2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code))]
+    if m["swap"] >= 0.5 * GB:
+        parts.append((2 if code else 5, color(t("swap", size=size(m["swap"])), code)))
+    return parts
+
+
+def build_parts(m, kinds):
+    """Gradle and Kotlin daemons, simulators and emulators: shown in build projects or when memory is tight."""
+    tight = bool(memory_code(m))
     parts = []
-    cwd = (d.get("workspace") or {}).get("current_dir") or d.get("cwd") or os.getcwd()
-    proj = cached("project-" + cwd, 30, lambda: project(cwd))
-    kinds = set(proj["kinds"])
-    g = cached("git-" + cwd, 3, lambda: git(cwd))
-    part = worktree_part(d, g)
-    if part:
-        parts.append(part)
-    op = git_op(proj.get("git_dir")) if g else None
-    if g and g.get("branch"):
-        parts.append(branch_part(g, proj, d, op))
-    part = op_part(op, g) if g else None
-    if part:
-        parts.append(part)
-    part = review_part(d)
-    if part:
-        parts.append(part)
-    parts += badges(d, cwd)
-    if "web" in kinds:
-        parts += dev_parts(proj)
-        if proj.get("node_dir"):
-            nc = cached("node-" + proj["node_dir"], 60, lambda: node_check(proj["node_dir"]))
-            if nc:
-                parts.append((1, color(t(nc["key"], **{k: v for k, v in nc.items() if k != "key"}), YELLOW)))
-    m = cached("machine", 5, machine)
-    tight = False
-    if m.get("total"):
-        free = m["total"] - m["used"]
-        code = RED if free < GB or m["swap"] > 6 * GB else YELLOW if free < 2 * GB or m["swap"] > 3 * GB else ""
-        tight = bool(code)
-        parts.append((2 if code else 3, color(t("memory", used=gb(m["used"]), total=f"{m['total'] / GB:.0f}"), code)))
-        if m["swap"] >= 0.5 * GB:
-            parts.append((2 if code else 5, color(t("swap", size=size(m["swap"])), code)))
-    parts += power_parts(cached("power", 30, power))
-    part = disk_part(cached("disk", 30, disk_free))
-    if part:
-        parts.append(part)
-    builds = kinds & {"mobile", "jvm"}
     names = daemon_names(m.get("gradle", 0), m.get("kotlin", 0))
-    if names and (builds or tight or m["daemon_mem"] >= 1.5 * GB):
-        heavy = m["daemon_mem"] >= 1.5 * GB
+    heavy = m.get("daemon_mem", 0) >= 1.5 * GB
+    if names and (kinds & {"mobile", "jvm"} or tight or heavy):
         parts.append((2 if heavy else 3, color(t("daemons", names=names, size=size(m["daemon_mem"])),
                                                YELLOW if heavy else "")))
     if "mobile" in kinds or tight:
@@ -920,14 +944,49 @@ def work_line(d):
             parts.append((3, t("sims", n=m["sims"])))
         if m.get("emulator"):
             parts.append((3, t("emulator")))
-    path = d.get("transcript_path")
-    if path:
-        sid = d.get("session_id") or os.path.basename(path)
-        n = cached("size-" + sid, 30, lambda: session_size(path))
-        if n >= 50 * MB:
-            code = level(n, 150 * MB, 400 * MB)
-            parts.append((3 if code == RED else 5, color(t("session", size=size(n)), code)))
     return parts
+
+
+def session_file_part(d):
+    path = d.get("transcript_path")
+    if not path or not isinstance(path, str):
+        return None
+    sid = str(d.get("session_id") or os.path.basename(path))
+    n = cached("size-" + sid, 30, lambda: session_size(path))
+    if n < 50 * MB:
+        return None
+    code = level(n, 150 * MB, 400 * MB)
+    return (3 if code == RED else 5, color(t("session", size=size(n)), code))
+
+
+def work_cwd(d):
+    for cwd in (obj(d.get("workspace")).get("current_dir"), d.get("cwd")):
+        if isinstance(cwd, str) and cwd:
+            return cwd
+    return os.getcwd()
+
+
+def work_line(d):
+    cwd = work_cwd(d)
+    proj = obj(safe(lambda: cached("project-" + cwd, 30, lambda: project(cwd))))
+    proj.setdefault("root", cwd)
+    for key in ("kinds", "ports"):
+        proj[key] = proj.get(key) if isinstance(proj.get(key), list) else []
+    kinds = set(proj["kinds"])
+    g = obj(safe(lambda: cached("git-" + cwd, 3, lambda: git(cwd)))) or None
+    m = obj(safe(lambda: cached("machine", 5, machine)))
+    return collect([
+        lambda: worktree_part(d, g),
+        lambda: git_parts(d, proj, g),
+        lambda: review_part(d),
+        lambda: badges(d, cwd),
+        lambda: web_parts(proj) if "web" in kinds else None,
+        lambda: memory_parts(m),
+        lambda: power_parts(cached("power", 30, power)),
+        lambda: disk_part(cached("disk", 30, disk_free)),
+        lambda: build_parts(m, kinds),
+        lambda: session_file_part(d),
+    ])
 
 
 ESCAPES = re.compile(r"\033\[[0-9;]*m|\033\]8;;[^\a\033]*(?:\a|\033\\)")
@@ -964,7 +1023,7 @@ def columns():
 
 
 def render(d, cols=0):
-    lines = [fit(parts, cols) for parts in (claude_line(d), work_line(d))]
+    lines = [safe(lambda: fit(make(d), cols), "") for make in (claude_line, work_line)]
     return "\n".join(line for line in lines if line)
 
 
