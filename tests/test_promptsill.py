@@ -76,6 +76,29 @@ class Render(unittest.TestCase):
     def test_empty_input(self):
         self.assertIsInstance(ps.render({}), str)
 
+    def test_wrong_types_never_blank_the_line(self):
+        good = {"model": {"display_name": "Opus"}, "context_window": {"used_percentage": 42},
+                "workspace": {"current_dir": ROOT}}
+        odd = [None, 5, "x", [1], {"a": [1]}, 1e20, True]
+        keys = ["model", "context_window", "workspace", "pr", "worktree", "rate_limits", "prompt_cache", "effort",
+                "session_id", "transcript_path", "cwd", "fast_mode"]
+        for key in keys:
+            for value in odd:
+                d = dict(good, **{key: value})
+                out = plain(ps.render(d, 200))
+                if key != "model":
+                    self.assertIn("Opus", out, (key, value))
+        limits = {"five_hour": {"used_percentage": 50, "resets_at": 1e20},
+                  "spend_limit": {"used": 1, "limit": 2, "period": [1]}}
+        self.assertIn("context", plain(ps.render(dict(good, rate_limits=limits), 200)))
+
+    def test_odd_package_json(self):
+        folder = tempfile.mkdtemp(dir=TMP)
+        with open(os.path.join(folder, "package.json"), "w") as f:
+            json.dump({"dependencies": ["vite"], "scripts": "dev", "engines": "node 20"}, f)
+        self.assertEqual(ps.project(folder)["kinds"], ["web"])
+        self.assertIsNone(ps.node_check(folder))
+
     def test_fit_shortens_then_drops(self):
         parts = [(1, "context ██▏░░ 42%", "context 42%"), (4, "Opus"), (3, "week 35%")]
         self.assertEqual(plain(ps.fit(parts, 0)), "context ██▏░░ 42% · Opus · week 35%")
