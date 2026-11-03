@@ -225,6 +225,41 @@ class Cache(unittest.TestCase):
         self.assertIsNone(ps.cache_part(None, 1000))
 
 
+class CacheFiles(unittest.TestCase):
+    def test_long_paths_do_not_collide(self):
+        cwd = "/" + "x" * 300
+        self.assertNotEqual(ps.cache_path("git-" + cwd), ps.cache_path("project-" + cwd))
+        self.assertNotEqual(ps.cache_path("git-/a/b_c"), ps.cache_path("git-/a/b/c"))
+        self.assertLess(len(os.path.basename(ps.cache_path("project-" + cwd))), 40)
+        self.assertTrue(ps.cache_path("machine").endswith("/machine.json"))
+
+    def test_cached_round_trip(self):
+        calls = []
+        fn = lambda: calls.append(1) or {"branch": "фича"}
+        self.assertEqual(ps.cached("git-/tmp/round-trip", 60, fn), {"branch": "фича"})
+        self.assertEqual(ps.cached("git-/tmp/round-trip", 60, fn), {"branch": "фича"})
+        self.assertEqual(len(calls), 1)
+
+    def test_prune_drops_stale_files_once_a_day(self):
+        os.makedirs(ps.CACHE, exist_ok=True)
+        old, fresh = os.path.join(ps.CACHE, "old.json"), os.path.join(ps.CACHE, "fresh.json")
+        for path in (old, fresh):
+            with open(path, "w") as f:
+                f.write("{}")
+        os.utime(old, (time.time() - 2 * 86400,) * 2)
+        stamp = os.path.join(ps.CACHE, ".pruned")
+        if os.path.exists(stamp):
+            os.remove(stamp)
+        ps.prune()
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.exists(fresh))
+        with open(old, "w") as f:
+            f.write("{}")
+        os.utime(old, (time.time() - 2 * 86400,) * 2)
+        ps.prune()
+        self.assertTrue(os.path.exists(old))
+
+
 class Links(unittest.TestCase):
     def test_remote_to_web(self):
         self.assertEqual(ps.web_url("git@github.com:kopylovis/promptsill.git"), "https://github.com/kopylovis/promptsill")
