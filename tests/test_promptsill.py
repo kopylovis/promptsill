@@ -550,6 +550,27 @@ class GitState(unittest.TestCase):
         self.assertEqual((g["changed"], g["conflicts"]), (2, 1))
 
 
+class Repo(unittest.TestCase):
+    def test_project_and_status_in_a_real_repo(self):
+        repo = tempfile.mkdtemp(dir=TMP)
+        subprocess.run(["git", "init", "-q", "-b", "main", repo], check=True)
+        sub = os.path.join(repo, "sub")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "f"), "w") as f:
+            f.write("x")
+        proj = ps.project(sub)
+        self.assertEqual(os.path.realpath(proj["root"]), os.path.realpath(repo))
+        self.assertEqual(os.path.realpath(proj["git_dir"]), os.path.realpath(os.path.join(repo, ".git")))
+        g = ps.git(sub)
+        self.assertEqual((g["branch"], g["changed"]), ("main", 1))
+        self.assertFalse(os.path.exists(os.path.join(repo, ".git", "index.lock")))
+
+    def test_outside_a_repo(self):
+        folder = tempfile.mkdtemp(dir=TMP)
+        proj = ps.project(folder)
+        self.assertEqual((proj["root"], proj["git_dir"]), (folder, None))
+
+
 class Power(unittest.TestCase):
     def setUp(self):
         reset_opts()
