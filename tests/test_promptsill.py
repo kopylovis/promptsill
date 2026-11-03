@@ -346,7 +346,8 @@ class RemoteControl(unittest.TestCase):
 
 
 class Proxy(unittest.TestCase):
-    NAMES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "PROMPTSILL_PROXY_LABEL")
+    NAMES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "PROMPTSILL_PROXY_LABEL",
+             "PROMPTSILL_PROXY_DETAIL", "PROMPTSILL_PROXY_URL", "TERM_PROGRAM")
 
     def setUp(self):
         reset_opts()
@@ -374,6 +375,32 @@ class Proxy(unittest.TestCase):
         part = ps.proxy_part()
         self.assertEqual(plain(part[1]), "proxy KZ31m")
         self.assertIn(ESC + "[32m", part[1])
+
+    def test_detail_inline_where_links_cannot_be_clicked(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        os.environ["PROMPTSILL_PROXY_DETAIL"] = "vless 203.0.113.7\x1b]8;;x"
+        os.environ["PROMPTSILL_PROXY_URL"] = "file:///Users/me/.local/state/mnrh/proxy/exit.html"
+        os.environ["TERM_PROGRAM"] = "Apple_Terminal"
+        part = ps.proxy_part()
+        self.assertEqual(plain(part[1]), "proxy KZ vless 203.0.113.78x")
+        self.assertNotIn("]8;;", part[1])
+        reset_opts(links=False)
+        os.environ["PROMPTSILL_PROXY_DETAIL"] = "vless 203.0.113.7"
+        os.environ["TERM_PROGRAM"] = "iTerm.app"
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ vless 203.0.113.7")
+
+    def test_detail_behind_link_where_clickable(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        os.environ["PROMPTSILL_PROXY_DETAIL"] = "vless 203.0.113.7"
+        os.environ["PROMPTSILL_PROXY_URL"] = "file:///Users/me/.local/state/mnrh/proxy/exit.html"
+        os.environ["TERM_PROGRAM"] = "iTerm.app"
+        part = ps.proxy_part()
+        self.assertEqual(plain(part[1]), "proxy KZ")
+        self.assertIn("]8;;file:///Users/me/.local/state/mnrh/proxy/exit.html", part[1])
+        os.environ["PROMPTSILL_PROXY_URL"] = "javascript:alert(1)"
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ vless 203.0.113.7")
 
     def test_local_proxy_down_and_up(self):
         with socket.socket() as srv:
