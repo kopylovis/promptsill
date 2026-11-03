@@ -43,7 +43,9 @@ BASE = {
 SCENES = [
     {"caption": {"en": "an ordinary hour: limit pace, cache timer, a reviewed pull request",
                  "ru": "обычный час: темп лимита, таймер кэша, PR с одобрением"},
-     "data": {"pr": {"url": "https://github.com/acme/shop/pull/42", "review_state": "approved"}}},
+     "data": {"pr": {"url": "https://github.com/acme/shop/pull/42", "review_state": "approved"},
+              "context_window": {"used_percentage": 42, "total_input_tokens": 84000,
+                                 "context_window_size": 200000}}},
     {"caption": {"en": "a web project: dev server, a port held by another folder, the wrong node",
                  "ru": "веб-проект: dev-сервер, порт занят другой папкой, не та версия node"},
      "data": {"model": {"display_name": "Sonnet"}, "effort": None, "context_window": {"used_percentage": 18},
@@ -57,9 +59,10 @@ SCENES = [
               "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
               "sessions": [{"sessionId": "demo", "bridgeSessionId": "session_01demo", "status": "busy"},
                            {"sessionId": "other", "name": "kcalm", "status": "waiting"}]}},
-    {"caption": {"en": "an Android build on a busy Mac: a rebase with conflicts, swap, daemons, emulator",
-                 "ru": "сборка Android на загруженном Mac: rebase с конфликтами, swap, демоны, эмулятор"},
-     "data": {"context_window": {"used_percentage": 71}, "prompt_cache": None,
+    {"caption": {"en": "an Android build on a busy Mac: Claude's todo list, a rebase with conflicts, swap, daemons",
+                 "ru": "сборка Android на загруженном Mac: задачи Claude, rebase с конфликтами, swap, демоны"},
+     "activity": {"todo": {"done": 2, "total": 4, "now": "Running unit tests"}, "tool": "Bash: ./gradlew test"},
+     "data": {"context_window": {"used_percentage": 71}, "prompt_cache": None, "transcript_path": "/work/demo.jsonl",
               "rate_limits": {"five_hour": {"used_percentage": 30, "resets_at": NOW + 2 * 3600},
                               "seven_day": {"used_percentage": 35, "resets_at": NOW + 4 * 86400}}},
      "demo": {"project": {"root": "/work/app", "kinds": ["mobile"], "ports": [], "node_dir": None,
@@ -67,15 +70,12 @@ SCENES = [
               "git": {"branch": "(detached)", "ahead": 0, "behind": 0, "upstream": False, "changed": 4, "conflicts": 2},
               "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
                           "daemon_mem": 1.9 * ps.GB, "sims": 0, "emulator": True},
-              "sessions": [{"sessionId": "demo", "status": "busy"},
-                           {"sessionId": "done", "name": "authmeister", "status": "idle",
-                            "statusUpdatedAt": (NOW - 120) * 1000, "startedAt": (NOW - 3600) * 1000}]},
+              "sessions": [{"sessionId": "demo", "status": "busy"}]},
      "git_op": {"op": "rebase", "branch": "login-fix", "step": "3/7"}},
-    {"caption": {"en": "back from a break: the cache expired, a proxy, a hot Mac, a full disk",
-                 "ru": "после перерыва: кэш истек, прокси, Mac греется, диск почти полон"},
-     "data": {"context_window": {"used_percentage": 64},
-              "rate_limits": {"five_hour": {"used_percentage": 6, "resets_at": NOW + 4.5 * 3600},
-                              "seven_day": {"used_percentage": 41, "resets_at": NOW + 4 * 86400}},
+    {"caption": {"en": "back from a break: the cache expired, a newer Claude Code, a hot Mac, a full disk",
+                 "ru": "после перерыва: кэш истек, вышел новый Claude Code, Mac греется, диск почти полон"},
+     "data": {"context_window": {"used_percentage": 64}, "version": "2.1.293",
+              "rate_limits": {"seven_day": {"used_percentage": 41, "resets_at": NOW + 4 * 86400}},
               "prompt_cache": {"caching_observed": True, "warm": False, "ttl": "5m", "requests": 40,
                                "recache_tokens_if_cold": 184000},
               "transcript_path": "/work/demo.jsonl"},
@@ -95,7 +95,7 @@ def scene_lines(scene, lang):
     ps.OPTS.update({"lang": lang, "ascii": False, "color": True, "links": True})
     demo = dict(BASE_DEMO, **scene.get("demo", {}))
     data = {k: v for k, v in dict(BASE, **scene.get("data", {})).items() if v is not None}
-    saved = {name: getattr(ps, name) for name in ("cached", "git_op", "badges")}
+    saved = {name: getattr(ps, name) for name in ("cached", "git_op", "badges", "transcript_activity", "peek")}
     saved_env = {k: os.environ.pop(k, None) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy",
                                                        "PROMPTSILL_PROXY_LABEL", "PROMPTSILL_PROXY_DETAIL",
                                                        "PROMPTSILL_PROXY_URL")}
@@ -104,6 +104,8 @@ def scene_lines(scene, lang):
     ps.cached = lambda name, ttl, fn, background=False: demo[name.split("-")[0]]
     ps.git_op = lambda git_dir: scene.get("git_op")
     ps.badges = lambda d, cwd, now=None: list(scene.get("badges", []))
+    ps.transcript_activity = lambda path: scene.get("activity", {})
+    ps.peek = lambda name, ttl: "2.1.300" if name == "claude" else None
     real = ps.time.time
     ps.time.time = lambda: NOW
     try:
