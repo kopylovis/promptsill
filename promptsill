@@ -54,6 +54,7 @@ TEXT = {
         "done_1": "{names} done", "done_2": "{names} done", "done_n": "{n} sessions done",
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
         "agent": "agent {name}", "style": "style {name}", "no_thinking": "thinking off",
+        "cache_hits": "cache hits {n}%", "cache_misses": "{n} misses",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
@@ -80,6 +81,7 @@ TEXT = {
         "done_1": "{names} закончила", "done_2": "{names} закончили", "done_n": "закончили: {n}",
         "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
         "agent": "агент {name}", "style": "стиль {name}", "no_thinking": "thinking выключен",
+        "cache_hits": "кэш попаданий {n}%", "cache_misses": "промахов {n}",
     },
 }
 
@@ -631,6 +633,24 @@ def miss_part(cache, now):
     return (3, color(t("cache_miss", cause=", ".join(known)), YELLOW))
 
 
+CACHE_HITS_LOW = 0.8
+
+
+def cache_health_part(cache):
+    """A cache that keeps missing burns the limit quietly: shown once hits drop under 80% of input, or misses pile up."""
+    if not isinstance(cache, dict) or not cache.get("caching_observed"):
+        return None
+    ratio, misses, requests = cache.get("hit_ratio"), cache.get("misses"), cache.get("requests")
+    if not isinstance(requests, int) or requests < 5 or not isinstance(ratio, (int, float)):
+        return None
+    misses = misses if isinstance(misses, int) else 0
+    if ratio >= CACHE_HITS_LOW and misses < 3:
+        return None
+    code = RED if ratio < 0.5 else YELLOW
+    text = t("cache_hits", n=f"{ratio * 100:.0f}") + (", " + t("cache_misses", n=misses) if misses else "")
+    return (3, color(text, code), color(t("cache_hits", n=f"{ratio * 100:.0f}"), code))
+
+
 def cache_part(cache, now):
     if not isinstance(cache, dict) or not cache.get("caching_observed"):
         return None
@@ -887,6 +907,7 @@ def claude_line(d, now=None):
         lambda: context_part(d),
         *(lambda key=key: limit_part(key, obj(limits.get(key)), now) for key in ("five_hour", "seven_day", "spend_limit")),
         lambda: cache_part(d.get("prompt_cache"), now),
+        lambda: cache_health_part(d.get("prompt_cache")),
         lambda: others_parts(d, sessions, now),
         lambda: work_done_parts(d),
     ])
