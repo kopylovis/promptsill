@@ -692,6 +692,24 @@ class Install(unittest.TestCase):
         self.assertEqual(self.run_cli("uninstall").returncode, 0)
         self.assertEqual(self.read()["statusLine"]["command"], "other")
 
+    def test_symlinked_settings_stay_a_symlink(self):
+        target = os.path.join(self.dir, "dotfiles-settings.json")
+        with open(target, "w") as f:
+            json.dump({"theme": "dark"}, f)
+        os.symlink(target, self.settings)
+        self.assertEqual(self.run_cli("install").returncode, 0)
+        self.assertTrue(os.path.islink(self.settings))
+        with open(target) as f:
+            self.assertIn("promptsill", json.load(f)["statusLine"]["command"])
+
+    def test_only_a_promptsill_program_counts_as_ours(self):
+        self.assertTrue(ps.ours({"command": "/opt/homebrew/bin/promptsill"}))
+        self.assertTrue(ps.ours({"command": "'/a b/promptsill' --lang ru"}))
+        self.assertTrue(ps.ours({"command": "python3 ~/src/promptsill/promptsill"}))
+        self.assertFalse(ps.ours({"command": "~/bin/promptsill-wrap.sh && other"}))
+        self.assertFalse(ps.ours({"command": "echo 'it is not promptsill"}))
+        self.assertFalse(ps.ours("promptsill"))
+
     def test_plugin_data_copy_and_sync(self):
         data = os.path.join(self.dir, "plugin-data")
         self.assertEqual(self.run_cli("install", "--plugin-data", data).returncode, 0)
