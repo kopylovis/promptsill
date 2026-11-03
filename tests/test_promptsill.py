@@ -456,6 +456,50 @@ class Subagents(unittest.TestCase):
         self.assertEqual(cli("subagents", stdin="garbage").returncode, 0)
 
 
+class Activity(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+        self.path = os.path.join(tempfile.mkdtemp(dir=TMP), "t.jsonl")
+
+    def write(self, *entries):
+        with open(self.path, "w") as f:
+            for e in entries:
+                f.write(json.dumps(e) + "\n")
+
+    def use(self, tid, name, inp):
+        return {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": tid, "name": name,
+                                                              "input": inp}]}}
+
+    def result(self, tid):
+        return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid}]}}
+
+    def texts(self):
+        return [plain(p[1]) for p in ps.activity_parts({"transcript_path": self.path})]
+
+    def test_todo_progress_and_tool_in_flight(self):
+        todos = [{"content": "Write tests", "activeForm": "Writing tests", "status": "completed"},
+                 {"content": "Run tests", "activeForm": "Running tests", "status": "in_progress"},
+                 {"content": "Commit", "activeForm": "Committing", "status": "pending"}]
+        self.write(self.use("t1", "TodoWrite", {"todos": todos}), self.result("t1"),
+                   self.use("t2", "Bash", {"command": "make test", "description": "Run the test suite"}))
+        self.assertEqual(self.texts(), ["todo 1/3: Running tests", "Bash: Run the test suite"])
+
+    def test_finished_tool_and_finished_list_are_quiet(self):
+        todos = [{"content": "A", "status": "completed"}]
+        self.write(self.use("t1", "TodoWrite", {"todos": todos}), self.result("t1"),
+                   self.use("t2", "Edit", {"file_path": "/w/promptsill"}), self.result("t2"))
+        self.assertEqual(self.texts(), [])
+
+    def test_labels(self):
+        self.assertEqual(ps.tool_label("Edit", {"file_path": "/w/src/app.py"}), "Edit: app.py")
+        self.assertEqual(ps.tool_label("mcp__github__create_pull_request", {}), "github: create_pull_request")
+        self.assertEqual(ps.tool_label("Agent", {"description": "Review code", "prompt": "long"}),
+                         "Agent: Review code")
+
+    def test_missing_transcript(self):
+        self.assertEqual(ps.activity_parts({"transcript_path": "/nope.jsonl"}), [])
+
+
 class Links(unittest.TestCase):
     def test_remote_to_web(self):
         self.assertEqual(ps.web_url("git@github.com:kopylovis/promptsill.git"), "https://github.com/kopylovis/promptsill")
