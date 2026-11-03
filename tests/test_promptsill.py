@@ -513,6 +513,10 @@ class OtherSessions(unittest.TestCase):
         reset_opts(lang="ru")
         self.assertEqual(self.texts(sessions), ["kcalm ждет тебя", "auth закончила"])
 
+    def test_day_old_waiting_entry_is_a_leftover(self):
+        self.assertEqual(self.texts([self.s("crashed", "waiting", 2 * 86400), self.s("kcalm", "waiting", 3600)]),
+                         ["kcalm waits for you"])
+
     def test_fresh_idle_session_is_not_done(self):
         self.assertEqual(self.texts([self.s("new", "idle", 60, started_ago=61)]), [])
 

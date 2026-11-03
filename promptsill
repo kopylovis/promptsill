@@ -656,6 +656,8 @@ def claude_dir():
 SESSION_KEYS = ("pid", "sessionId", "bridgeSessionId", "name", "cwd", "status", "waitingFor", "statusUpdatedAt",
                 "startedAt")
 DONE_SHOWN = 600
+# A crashed Claude Code leaves its sessions/<pid>.json behind; if the pid is reused, the entry looks alive forever.
+WAITING_SHOWN = 86400
 
 
 def live_sessions():
@@ -718,7 +720,9 @@ def session_label(s):
 def others_parts(d, sessions, now):
     """Other Claude Code sessions on this machine that wait for you or have just finished."""
     others = [s for s in sessions if s.get("sessionId") != d.get("session_id")]
-    waiting = [session_label(s) for s in others if s.get("status") == "waiting"]
+    waiting = [session_label(s) for s in others if s.get("status") == "waiting"
+               and not (isinstance(s.get("statusUpdatedAt"), (int, float))
+                        and now - s["statusUpdatedAt"] / 1000 > WAITING_SHOWN)]
     done = []
     for s in others:
         changed, started = s.get("statusUpdatedAt"), s.get("startedAt")
