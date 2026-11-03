@@ -106,7 +106,8 @@ def level(value, warn, bad):
 
 def run(cmd, timeout=2, cwd=None):
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd).stdout
+        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout,
+                              cwd=cwd).stdout
     except (OSError, subprocess.TimeoutExpired):
         return ""
 
@@ -1175,6 +1176,10 @@ def parse(args):
 
 
 def main(argv):
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
     opts, rest = parse(argv)
     cmd = rest[0] if rest else ""
     if cmd in ("-h", "--help", "help") or (not cmd and sys.stdin.isatty()):

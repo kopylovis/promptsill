@@ -744,6 +744,14 @@ class Cli(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("context", r.stdout)
 
+    def test_undecodable_process_output(self):
+        self.assertEqual(ps.run(["printf", "a\\377b"]), "a\ufffdb")
+
+    def test_ascii_stdout(self):
+        env = dict(os.environ, PYTHONIOENCODING="ascii")
+        r = cli("preview", "--width", "200", env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_garbage_stdin(self):
         self.assertEqual(cli(stdin="junk").returncode, 0)
 
