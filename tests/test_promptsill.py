@@ -167,6 +167,26 @@ class Modes(unittest.TestCase):
                                          "thinking выключен"])
 
 
+class SessionInfo(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def test_name(self):
+        self.assertEqual(ps.name_part({"session_name": "checkout\x1b[31m redesign"})[1], "checkout[31m redesign")
+        self.assertIsNone(ps.name_part({}))
+
+    def test_lines_and_duration(self):
+        parts = ps.work_done_parts({"cost": {"total_lines_added": 156, "total_lines_removed": 23,
+                                             "total_duration_ms": 2 * 3600000 + 15 * 60000}})
+        self.assertEqual([plain(p[1]) for p in parts], ["+156 −23", "2h 15m"])
+        parts = ps.work_done_parts({"cost": {"total_lines_added": 0, "total_lines_removed": 0,
+                                             "total_duration_ms": 30000}})
+        self.assertEqual(parts, [])
+        reset_opts(lang="ru")
+        parts = ps.work_done_parts({"cost": {"total_duration_ms": 45 * 60000}})
+        self.assertEqual([plain(p[1]) for p in parts], ["45 мин"])
+
+
 class Model(unittest.TestCase):
     def setUp(self):
         reset_opts()
