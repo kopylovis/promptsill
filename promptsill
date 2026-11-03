@@ -288,8 +288,13 @@ def machine():
     return {**memory(), **processes()}
 
 
+def git_cmd(cwd, *args):
+    """git that never takes .git/index.lock, so a refresh can't break Claude's own git add or commit."""
+    return ["git", "--no-optional-locks", "-C", cwd, *args]
+
+
 def git(cwd):
-    out = run(["git", "-C", cwd, "status", "--porcelain=v2", "--branch"], timeout=3)
+    out = run(git_cmd(cwd, "status", "--porcelain=v2", "--branch"), timeout=3)
     if not out:
         return None
     info = {"branch": None, "ahead": 0, "behind": 0, "upstream": False, "changed": 0, "conflicts": 0}
@@ -355,7 +360,10 @@ WEB_DIRS = ["", "web", "frontend", "client", "site", "app"]
 
 
 def project(cwd):
-    root = run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], timeout=2).strip() or cwd
+    # git prints the git dir even when --show-toplevel fails, inside .git or in a bare repo
+    found = run(git_cmd(cwd, "rev-parse", "--absolute-git-dir", "--show-toplevel"), timeout=2).splitlines()
+    git_dir = found[0].strip() or None if found else None
+    root = found[1].strip() if len(found) > 1 and found[1].strip() else cwd
     kinds, ports, node_dir = set(), [], None
     try:
         names = set(os.listdir(root))
@@ -387,8 +395,7 @@ def project(cwd):
             ports.append(int(m.group(1)))
         else:
             ports += [port for dep, port in DEV_PORTS if dep in deps][:1]
-    repo = web_url(run(["git", "-C", root, "remote", "get-url", "origin"], timeout=2))
-    git_dir = run(["git", "-C", cwd, "rev-parse", "--absolute-git-dir"], timeout=2).strip() or None
+    repo = web_url(run(git_cmd(root, "remote", "get-url", "origin"), timeout=2))
     return {"root": root, "kinds": sorted(kinds), "ports": sorted(set(ports)), "node_dir": node_dir, "repo": repo,
             "git_dir": git_dir}
 
