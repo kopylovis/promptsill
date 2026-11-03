@@ -34,7 +34,7 @@ def plain(text):
 
 
 def reset_opts(**kw):
-    ps.OPTS.update({"lang": "en", "ascii": False, "color": True, "links": True}, **kw)
+    ps.OPTS.update({"lang": "en", "ascii": False, "color": True, "links": True, "session_name": True}, **kw)
 
 
 class Render(unittest.TestCase):
@@ -172,8 +172,14 @@ class SessionInfo(unittest.TestCase):
         reset_opts()
 
     def test_name(self):
-        self.assertEqual(ps.name_part({"session_name": "checkout\x1b[31m redesign"})[1], "checkout[31m redesign")
+        self.assertEqual(plain(ps.name_part({"session_name": "checkout\x1b[31m redesign"})[1]), "checkout[31m redesign")
         self.assertIsNone(ps.name_part({}))
+
+    def test_long_name_is_cut_on_a_word(self):
+        name = plain(ps.name_part({"session_name": "Проверка прокси-соединения сессий claudemeister"})[1])
+        self.assertEqual(name, "Проверка прокси-соединения…")
+        reset_opts(session_name=False)
+        self.assertIsNone(ps.name_part({"session_name": "x"}))
 
     def test_lines_and_duration(self):
         parts = ps.work_done_parts({"cost": {"total_lines_added": 156, "total_lines_removed": 23,
