@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="128" alt="promptsill icon" align="right">
+
 # promptsill
 
 A status line for [Claude Code](https://code.claude.com) that knows about your dev machine, not just your session.
