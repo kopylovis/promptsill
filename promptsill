@@ -1005,6 +1005,8 @@ def load_settings(path):
 
 
 def save_settings(path, settings):
+    # a settings.json symlinked from a dotfiles repo stays a symlink, the write goes to its target
+    path = os.path.realpath(path)
     if os.path.exists(path):
         shutil.copy2(path, path + ".promptsill-backup")
     write_json(path, settings)
@@ -1013,7 +1015,14 @@ def save_settings(path, settings):
 
 
 def ours(entry):
-    return isinstance(entry, dict) and "promptsill" in str(entry.get("command", ""))
+    """Our statusLine runs a file named promptsill; promptsill-wrap.sh or a line that merely mentions it is not ours."""
+    if not isinstance(entry, dict):
+        return False
+    try:
+        words = shlex.split(str(entry.get("command", "")))
+    except ValueError:
+        return False
+    return any(os.path.basename(w) == "promptsill" for w in words)
 
 
 def program():
