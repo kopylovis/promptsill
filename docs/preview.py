@@ -9,6 +9,7 @@ from html import escape
 os.environ["TZ"] = "UTC"
 time.tzset()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.dont_write_bytecode = True
 loader = importlib.machinery.SourceFileLoader("promptsill", os.path.join(ROOT, "promptsill"))
 spec = importlib.util.spec_from_loader("promptsill", loader)
 ps = importlib.util.module_from_spec(spec)
