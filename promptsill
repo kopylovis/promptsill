@@ -94,6 +94,11 @@ def link(text, url):
     return f"\033]8;;{url}\a{text}\033]8;;\a" if url and OPTS["links"] else text
 
 
+def clickable():
+    """Whether a link can actually be clicked. macOS Terminal shows the text but ignores OSC 8."""
+    return OPTS["links"] and os.environ.get("TERM_PROGRAM") != "Apple_Terminal"
+
+
 def level(value, warn, bad):
     return RED if value >= bad else YELLOW if value >= warn else ""
 
@@ -594,7 +599,12 @@ def proxy_part():
     if not target:
         return None
     label = re.sub(r"[^\w .:-]", "", os.environ.get("PROMPTSILL_PROXY_LABEL", ""))[:20].strip()
+    detail = re.sub(r"[^\w .:-]", "", os.environ.get("PROMPTSILL_PROXY_DETAIL", ""))[:40].strip()
+    url = os.environ.get("PROMPTSILL_PROXY_URL", "")
+    url = url if re.match(r"^(https?|file)://[^\s\x00-\x1f\x7f]+$", url) else ""
     text = t("proxy") + (f" {label}" if label else "")
+    # The details go behind the link where it can be clicked, and next to the label everywhere else.
+    text = link(text, url) if url and clickable() else text + (f" {detail}" if detail else "")
     host, port = target
     if port and host in ("127.0.0.1", "localhost", "::1"):
         if not cached(f"proxy-{port}", 5, lambda: proxy_up(host, port)):
