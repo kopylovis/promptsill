@@ -53,6 +53,7 @@ TEXT = {
         "waits_1": "{names} waits for you", "waits_2": "{names} wait for you", "waits_n": "{n} sessions wait for you",
         "done_1": "{names} done", "done_2": "{names} done", "done_n": "{n} sessions done",
         "fast": "fast", "worktree": "worktree", "approved": "approved", "changes_requested": "changes requested",
+        "agent": "agent {name}", "style": "style {name}", "no_thinking": "thinking off",
     },
     "ru": {
         "context": "контекст", "five_hour": "лимит 5 ч", "spend_limit": "расход", "seven_day": "неделя",
@@ -78,6 +79,7 @@ TEXT = {
         "waits_1": "{names} ждет тебя", "waits_2": "{names} ждут тебя", "waits_n": "ждут тебя: {n}",
         "done_1": "{names} закончила", "done_2": "{names} закончили", "done_n": "закончили: {n}",
         "fast": "fast", "worktree": "worktree", "approved": "одобрен", "changes_requested": "просят правки",
+        "agent": "агент {name}", "style": "стиль {name}", "no_thinking": "thinking выключен",
     },
 }
 
@@ -749,6 +751,30 @@ def model_part(d):
     return (4, text, color(model, CYAN))
 
 
+VIM_COLORS = {"INSERT": GREEN, "NORMAL": CYAN, "VISUAL": YELLOW, "VISUAL LINE": YELLOW}
+
+
+def clean(value, limit=30):
+    return re.sub(r"[\x00-\x1f\x7f]", "", value)[:limit].strip() if isinstance(value, str) else ""
+
+
+def mode_parts(d):
+    """Only what differs from a plain session: vim mode, an --agent, a custom output style, thinking turned off."""
+    parts = []
+    vim = clean(obj(d.get("vim")).get("mode"), 12)
+    if vim:
+        parts.append((2, color(vim, VIM_COLORS.get(vim, ""))))
+    agent = clean(obj(d.get("agent")).get("name"))
+    if agent:
+        parts.append((3, color(t("agent", name=agent), CYAN)))
+    style = clean(obj(d.get("output_style")).get("name"))
+    if style and style.lower() != "default":
+        parts.append((4, color(t("style", name=style), DIM)))
+    if obj(d.get("thinking")).get("enabled") is False:
+        parts.append((4, color(t("no_thinking"), DIM)))
+    return parts
+
+
 def session_label(s):
     name = s.get("name") if isinstance(s.get("name"), str) else ""
     name = name or os.path.basename(str(s.get("cwd") or "").rstrip("/")) or "?"
@@ -831,6 +857,7 @@ def claude_line(d, now=None):
     limits = obj(d.get("rate_limits"))
     return collect([
         lambda: model_part(d),
+        lambda: mode_parts(d),
         lambda: remote_part(d, sessions),
         proxy_part,
         lambda: context_part(d),
@@ -1201,6 +1228,7 @@ def install(opts):
         command += f" --lang {shlex.quote(opts['lang'])}"
     entry = dict(current) if ours(current) else {"padding": 0, "refreshInterval": 10}
     entry.update({"type": "command", "command": command})
+    entry.setdefault("hideVimModeIndicator", True)  # promptsill shows the vim mode itself
     settings["statusLine"] = entry
     save_settings(path, settings)
     print(f"✓ statusLine in {tilde(path)} → {command}")
