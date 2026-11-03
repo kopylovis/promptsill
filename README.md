@@ -1,8 +1,8 @@
-<img src="docs/icon.png" width="128" alt="promptsill icon" align="right">
+<p align="center"><img src="docs/icon.png" width="128" alt="promptsill icon"></p>
 
-# promptsill
+<h1 align="center">promptsill</h1>
 
-A status line for [Claude Code](https://code.claude.com) that knows about your dev machine, not just your session.
+<p align="center">A status line for <a href="https://code.claude.com">Claude Code</a> that knows about your dev machine, not just your session.</p>
 
 <a href="docs/preview-en.png"><img src="docs/preview-en.svg" alt="promptsill status line in four situations. An ordinary hour: limit pace, cache timer, an approved pull request. A web project: Remote Control, a session waiting for you, a dev server, a port held by another folder, the wrong node version. An Android build on a busy Mac: a rebase with conflicts, memory, swap, Gradle and Kotlin daemons, the emulator, another session done. Back from a break: a proxy, an expired cache, a guard badge, overheating, low battery, low disk, a large session file"></a>
 
