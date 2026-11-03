@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1006" height="356" viewBox="0 0 1006 356">
+<svg xmlns="http://www.w3.org/2000/svg" width="1090" height="356" viewBox="0 0 1090 356">
 <rect width="100%" height="100%" rx="8" fill="#1e1e1e"/>
 <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">
 <text x="16.0" y="30" fill="#7a7a7a">#</text>
@@ -22,29 +22,30 @@
 <rect x="192.4" y="40" width="8.4" height="15" fill="#d4d4d4"/>
 <rect x="200.8" y="40" width="1.1" height="15" fill="#d4d4d4"/>
 <text x="234.4 242.8 251.2" y="52" fill="#d4d4d4">42%</text>
-<text x="268.0" y="52" fill="#7a7a7a">·</text>
-<text x="284.8 293.2" y="52" fill="#ffcc66">5h</text>
-<rect x="310.0" y="40" width="42.0" height="15" fill="#585858"/>
-<rect x="310.0" y="40" width="8.4" height="15" fill="#ffcc66"/>
-<rect x="318.4" y="40" width="8.4" height="15" fill="#ffcc66"/>
-<rect x="326.8" y="40" width="8.4" height="15" fill="#ffcc66"/>
-<rect x="335.2" y="40" width="1.1" height="15" fill="#ffcc66"/>
-<text x="360.4 368.8 377.2" y="52" fill="#ffcc66">63%</text>
-<text x="394.0 402.4 410.8 419.2" y="52" fill="#ffcc66">+23%</text>
-<text x="427.6" y="52" fill="#ffcc66">,</text>
-<text x="444.4 452.8 461.2 469.6" y="52" fill="#ffcc66">runs</text>
-<text x="486.4 494.8 503.2" y="52" fill="#ffcc66">out</text>
-<text x="520.0 528.4" y="52" fill="#ffcc66">at</text>
-<text x="545.2 553.6 562.0 570.4 578.8 587.2" y="52" fill="#ffcc66">15:10,</text>
-<text x="604.0 612.4 620.8 629.2 637.6 646.0" y="52" fill="#ffcc66">resets</text>
-<text x="662.8 671.2" y="52" fill="#ffcc66">at</text>
-<text x="688.0 696.4 704.8 713.2 721.6" y="52" fill="#ffcc66">17:00</text>
-<text x="738.4" y="52" fill="#7a7a7a">·</text>
-<text x="755.2 763.6 772.0 780.4" y="52" fill="#d4d4d4">week</text>
-<text x="797.2 805.6 814.0" y="52" fill="#d4d4d4">35%</text>
-<text x="830.8" y="52" fill="#7a7a7a">·</text>
-<text x="847.6 856.0 864.4 872.8 881.2" y="52" fill="#ffcc66">cache</text>
-<text x="898.0 906.4 914.8" y="52" fill="#ffcc66">44s</text>
+<text x="268.0 276.4 284.8 293.2 301.6 310.0 318.4 326.8" y="52" fill="#7a7a7a">84k/200k</text>
+<text x="343.6" y="52" fill="#7a7a7a">·</text>
+<text x="360.4 368.8" y="52" fill="#ffcc66">5h</text>
+<rect x="385.6" y="40" width="42.0" height="15" fill="#585858"/>
+<rect x="385.6" y="40" width="8.4" height="15" fill="#ffcc66"/>
+<rect x="394.0" y="40" width="8.4" height="15" fill="#ffcc66"/>
+<rect x="402.4" y="40" width="8.4" height="15" fill="#ffcc66"/>
+<rect x="410.8" y="40" width="1.1" height="15" fill="#ffcc66"/>
+<text x="436.0 444.4 452.8" y="52" fill="#ffcc66">63%</text>
+<text x="469.6 478.0 486.4 494.8" y="52" fill="#ffcc66">+23%</text>
+<text x="503.2" y="52" fill="#ffcc66">,</text>
+<text x="520.0 528.4 536.8 545.2" y="52" fill="#ffcc66">runs</text>
+<text x="562.0 570.4 578.8" y="52" fill="#ffcc66">out</text>
+<text x="595.6 604.0" y="52" fill="#ffcc66">at</text>
+<text x="620.8 629.2 637.6 646.0 654.4 662.8" y="52" fill="#ffcc66">15:10,</text>
+<text x="679.6 688.0 696.4 704.8 713.2 721.6" y="52" fill="#ffcc66">resets</text>
+<text x="738.4 746.8" y="52" fill="#ffcc66">at</text>
+<text x="763.6 772.0 780.4 788.8 797.2" y="52" fill="#ffcc66">17:00</text>
+<text x="814.0" y="52" fill="#7a7a7a">·</text>
+<text x="830.8 839.2 847.6 856.0" y="52" fill="#d4d4d4">week</text>
+<text x="872.8 881.2 889.6" y="52" fill="#d4d4d4">35%</text>
+<text x="906.4" y="52" fill="#7a7a7a">·</text>
+<text x="923.2 931.6 940.0 948.4 956.8" y="52" fill="#ffcc66">cache</text>
+<text x="973.6 982.0 990.4" y="52" fill="#ffcc66">44s</text>
 <text x="16.0 24.4 32.8 41.2 49.6 58.0 66.4 74.8 83.2 91.6 100.0 108.4 116.8 125.2 133.6 142.0 150.4" y="74" fill="#99cc99">checkout-redesign</text>
 <text x="167.2 175.6" y="74" fill="#99cc99">↑2</text>
 <text x="192.4 200.8" y="74" fill="#99cc99">±3</text>
@@ -122,13 +123,15 @@
 <text x="200.8" y="206" fill="#7a7a7a">a</text>
 <text x="217.6 226.0 234.4 242.8" y="206" fill="#7a7a7a">busy</text>
 <text x="259.6 268.0 276.4 284.8" y="206" fill="#7a7a7a">Mac:</text>
-<text x="301.6" y="206" fill="#7a7a7a">a</text>
-<text x="318.4 326.8 335.2 343.6 352.0 360.4" y="206" fill="#7a7a7a">rebase</text>
-<text x="377.2 385.6 394.0 402.4" y="206" fill="#7a7a7a">with</text>
-<text x="419.2 427.6 436.0 444.4 452.8 461.2 469.6 478.0 486.4 494.8" y="206" fill="#7a7a7a">conflicts,</text>
-<text x="511.6 520.0 528.4 536.8 545.2" y="206" fill="#7a7a7a">swap,</text>
-<text x="562.0 570.4 578.8 587.2 595.6 604.0 612.4 620.8" y="206" fill="#7a7a7a">daemons,</text>
-<text x="637.6 646.0 654.4 662.8 671.2 679.6 688.0 696.4" y="206" fill="#7a7a7a">emulator</text>
+<text x="301.6 310.0 318.4 326.8 335.2 343.6 352.0 360.4" y="206" fill="#7a7a7a">Claude&#x27;s</text>
+<text x="377.2 385.6 394.0 402.4" y="206" fill="#7a7a7a">todo</text>
+<text x="419.2 427.6 436.0 444.4 452.8" y="206" fill="#7a7a7a">list,</text>
+<text x="469.6" y="206" fill="#7a7a7a">a</text>
+<text x="486.4 494.8 503.2 511.6 520.0 528.4" y="206" fill="#7a7a7a">rebase</text>
+<text x="545.2 553.6 562.0 570.4" y="206" fill="#7a7a7a">with</text>
+<text x="587.2 595.6 604.0 612.4 620.8 629.2 637.6 646.0 654.4 662.8" y="206" fill="#7a7a7a">conflicts,</text>
+<text x="679.6 688.0 696.4 704.8 713.2" y="206" fill="#7a7a7a">swap,</text>
+<text x="730.0 738.4 746.8 755.2 763.6 772.0 780.4" y="206" fill="#7a7a7a">daemons</text>
 <text x="16.0 24.4 32.8 41.2" y="228" fill="#66cccc">Opus</text>
 <text x="58.0 66.4 74.8 83.2" y="228" fill="#66cccc">high</text>
 <text x="100.0" y="228" fill="#7a7a7a">·</text>
@@ -152,8 +155,15 @@
 <text x="553.6 562.0 570.4 578.8" y="228" fill="#d4d4d4">week</text>
 <text x="595.6 604.0 612.4" y="228" fill="#d4d4d4">35%</text>
 <text x="629.2" y="228" fill="#7a7a7a">·</text>
-<text x="646.0 654.4 662.8 671.2 679.6 688.0 696.4 704.8 713.2 721.6 730.0" y="228" fill="#99cc99">authmeister</text>
-<text x="746.8 755.2 763.6 772.0" y="228" fill="#99cc99">done</text>
+<text x="646.0 654.4 662.8 671.2" y="228" fill="#66cccc">todo</text>
+<text x="688.0 696.4 704.8 713.2" y="228" fill="#66cccc">2/4:</text>
+<text x="730.0 738.4 746.8 755.2 763.6 772.0 780.4" y="228" fill="#66cccc">Running</text>
+<text x="797.2 805.6 814.0 822.4" y="228" fill="#66cccc">unit</text>
+<text x="839.2 847.6 856.0 864.4 872.8" y="228" fill="#66cccc">tests</text>
+<text x="889.6" y="228" fill="#7a7a7a">·</text>
+<text x="906.4 914.8 923.2 931.6 940.0" y="228" fill="#7a7a7a">Bash:</text>
+<text x="956.8 965.2 973.6 982.0 990.4 998.8 1007.2 1015.6 1024.0" y="228" fill="#7a7a7a">./gradlew</text>
+<text x="1040.8 1049.2 1057.6 1066.0" y="228" fill="#7a7a7a">test</text>
 <text x="16.0 24.4 32.8 41.2 49.6 58.0 66.4 74.8 83.2" y="250" fill="#99cc99">login-fix</text>
 <text x="100.0 108.4" y="250" fill="#99cc99">±4</text>
 <text x="125.2" y="250" fill="#7a7a7a">·</text>
@@ -188,13 +198,15 @@
 <text x="226.0 234.4 242.8 251.2 259.6" y="294" fill="#7a7a7a">cache</text>
 <text x="276.4 284.8 293.2 301.6 310.0 318.4 326.8 335.2" y="294" fill="#7a7a7a">expired,</text>
 <text x="352.0" y="294" fill="#7a7a7a">a</text>
-<text x="368.8 377.2 385.6 394.0 402.4 410.8" y="294" fill="#7a7a7a">proxy,</text>
-<text x="427.6" y="294" fill="#7a7a7a">a</text>
-<text x="444.4 452.8 461.2" y="294" fill="#7a7a7a">hot</text>
-<text x="478.0 486.4 494.8 503.2" y="294" fill="#7a7a7a">Mac,</text>
-<text x="520.0" y="294" fill="#7a7a7a">a</text>
-<text x="536.8 545.2 553.6 562.0" y="294" fill="#7a7a7a">full</text>
-<text x="578.8 587.2 595.6 604.0" y="294" fill="#7a7a7a">disk</text>
+<text x="368.8 377.2 385.6 394.0 402.4" y="294" fill="#7a7a7a">newer</text>
+<text x="419.2 427.6 436.0 444.4 452.8 461.2" y="294" fill="#7a7a7a">Claude</text>
+<text x="478.0 486.4 494.8 503.2 511.6" y="294" fill="#7a7a7a">Code,</text>
+<text x="528.4" y="294" fill="#7a7a7a">a</text>
+<text x="545.2 553.6 562.0" y="294" fill="#7a7a7a">hot</text>
+<text x="578.8 587.2 595.6 604.0" y="294" fill="#7a7a7a">Mac,</text>
+<text x="620.8" y="294" fill="#7a7a7a">a</text>
+<text x="637.6 646.0 654.4 662.8" y="294" fill="#7a7a7a">full</text>
+<text x="679.6 688.0 696.4 704.8" y="294" fill="#7a7a7a">disk</text>
 <text x="16.0 24.4 32.8 41.2" y="316" fill="#66cccc">Opus</text>
 <text x="58.0 66.4 74.8 83.2" y="316" fill="#66cccc">high</text>
 <text x="100.0" y="316" fill="#7a7a7a">·</text>
@@ -209,21 +221,17 @@
 <rect x="301.6" y="304" width="2.1" height="15" fill="#ffcc66"/>
 <text x="326.8 335.2 343.6" y="316" fill="#ffcc66">64%</text>
 <text x="360.4" y="316" fill="#7a7a7a">·</text>
-<text x="377.2 385.6" y="316" fill="#d4d4d4">5h</text>
-<rect x="402.4" y="304" width="42.0" height="15" fill="#585858"/>
-<rect x="402.4" y="304" width="2.1" height="15" fill="#d4d4d4"/>
-<text x="452.8 461.2 469.6" y="316" fill="#d4d4d4">6%,</text>
-<text x="486.4 494.8 503.2 511.6 520.0 528.4" y="316" fill="#d4d4d4">resets</text>
-<text x="545.2 553.6" y="316" fill="#d4d4d4">at</text>
-<text x="570.4 578.8 587.2 595.6 604.0" y="316" fill="#d4d4d4">18:30</text>
-<text x="620.8" y="316" fill="#7a7a7a">·</text>
-<text x="637.6 646.0 654.4 662.8" y="316" fill="#d4d4d4">week</text>
-<text x="679.6 688.0 696.4" y="316" fill="#d4d4d4">41%</text>
-<text x="713.2" y="316" fill="#7a7a7a">·</text>
-<text x="730.0 738.4 746.8 755.2 763.6" y="316" fill="#ffcc66">cache</text>
-<text x="780.4 788.8 797.2 805.6 814.0 822.4 830.8" y="316" fill="#ffcc66">expired</text>
-<text x="847.6 856.0 864.4 872.8 881.2" y="316" fill="#ffcc66">(184k</text>
-<text x="898.0 906.4 914.8 923.2 931.6 940.0 948.4" y="316" fill="#ffcc66">tokens)</text>
+<text x="377.2 385.6 394.0 402.4" y="316" fill="#d4d4d4">week</text>
+<text x="419.2 427.6 436.0" y="316" fill="#d4d4d4">41%</text>
+<text x="452.8" y="316" fill="#7a7a7a">·</text>
+<text x="469.6 478.0 486.4 494.8 503.2" y="316" fill="#ffcc66">cache</text>
+<text x="520.0 528.4 536.8 545.2 553.6 562.0 570.4" y="316" fill="#ffcc66">expired</text>
+<text x="587.2 595.6 604.0 612.4 620.8" y="316" fill="#ffcc66">(184k</text>
+<text x="637.6 646.0 654.4 662.8 671.2 679.6 688.0" y="316" fill="#ffcc66">tokens)</text>
+<text x="704.8" y="316" fill="#7a7a7a">·</text>
+<text x="721.6 730.0 738.4 746.8 755.2 763.6 772.0" y="316" fill="#ffcc66">2.1.300</text>
+<text x="788.8 797.2 805.6 814.0 822.4 830.8 839.2 847.6 856.0 864.4" y="316" fill="#ffcc66">installed,</text>
+<text x="881.2 889.6 898.0 906.4 914.8 923.2 931.6" y="316" fill="#ffcc66">restart</text>
 <text x="16.0 24.4 32.8 41.2" y="338" fill="#99cc99">main</text>
 <text x="58.0" y="338" fill="#7a7a7a">·</text>
 <text x="74.8 83.2 91.6 100.0 108.4" y="338" fill="#99cc99">guard</text>
