@@ -4,11 +4,11 @@
 
 A status line for [Claude Code](https://code.claude.com) that knows about your dev machine, not just your session.
 
-![promptsill status line: model with effort, Remote Control, context bar, 5-hour limit with pace, weekly limit, cache timer, a session waiting for you; branch, dev server, busy port, node version, memory, swap, Gradle and Kotlin daemons, simulators](docs/preview-en.svg)
+![promptsill status line in four situations. An ordinary hour: limit pace, cache timer, an approved pull request. A web project: Remote Control, a session waiting for you, a dev server, a port held by another folder, the wrong node version. An Android build on a busy Mac: a rebase with conflicts, memory, swap, Gradle and Kotlin daemons, the emulator, another session done. Back from a break: a proxy, an expired cache, a guard badge, overheating, low battery, low disk, a large session file](docs/preview-en.svg)
 
 ```text
-Opus high · remote control · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s · kcalm waits for you
-checkout-redesign ↑2 ±3 · vite :5173 · :3000 taken: api · node 20, need 22 (.nvmrc) · memory 14.6/16 GB · swap 2.1 GB · Gradle 1 + Kotlin 1 (1.9 GB)
+Opus high · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
+checkout-redesign ↑2 ±3 · approved · memory 9.4/16 GB
 ```
 
 ## What it shows that others don't

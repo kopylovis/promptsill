@@ -17,21 +17,16 @@ loader.exec_module(ps)
 
 NOW = 1_791_381_600
 ps.BADGES = os.path.join(ROOT, "docs", "no-badges")
-DEMO = {
-    "project": {"root": "/work/shop", "kinds": ["web", "mobile"], "ports": [3000, 5173], "node_dir": "/work/shop",
+GIT = {"branch": "checkout-redesign", "ahead": 2, "behind": 0, "upstream": True, "changed": 3}
+CALM = {"total": 16 * ps.GB, "used": 9.4 * ps.GB, "swap": 0, "gradle": 0, "kotlin": 0, "daemon_mem": 0, "sims": 0,
+        "emulator": False}
+BASE_DEMO = {
+    "project": {"root": "/work/shop", "kinds": [], "ports": [], "node_dir": None,
                 "repo": "https://github.com/acme/shop"},
-    "git": {"branch": "checkout-redesign", "ahead": 2, "behind": 0, "upstream": True, "changed": 3},
-    "listeners": [{"pid": "1", "ports": [5173], "cwd": "/work/shop", "name": "vite"},
-                  {"pid": "2", "ports": [3000], "cwd": "/work/api", "name": "node"}],
-    "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
-    "sessions": [{"sessionId": "demo", "bridgeSessionId": "session_01demo", "status": "busy"},
-                 {"sessionId": "other", "name": "kcalm", "status": "waiting"}],
-    "disk": 200 * ps.GB,
-    "power": {},
-    "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
-                "daemon_mem": 1.9 * ps.GB, "sims": 1, "emulator": False},
+    "git": GIT, "listeners": [], "node": None, "disk": 200 * ps.GB, "power": {}, "machine": CALM, "size": 0,
+    "sessions": [{"sessionId": "demo", "status": "busy"}], "proxy": True,
 }
-DATA = {
+BASE = {
     "session_id": "demo",
     "model": {"display_name": "Opus"},
     "effort": {"level": "high"},
@@ -40,23 +35,83 @@ DATA = {
     "rate_limits": {"five_hour": {"used_percentage": 63, "resets_at": NOW + 3 * 3600},
                     "seven_day": {"used_percentage": 35, "resets_at": NOW + 4 * 86400}},
     "prompt_cache": {"caching_observed": True, "warm": True, "ttl": "5m", "expires_at": NOW + 44, "requests": 12},
-    "pr": {"url": "https://github.com/acme/shop/pull/42"},
 }
+# Each scene is one snapshot of both lines, narrow enough that GitHub shows it near full size.
+SCENES = [
+    {"caption": {"en": "an ordinary hour: limit pace, cache timer, a reviewed pull request",
+                 "ru": "обычный час: темп лимита, таймер кэша, PR с одобрением"},
+     "data": {"pr": {"url": "https://github.com/acme/shop/pull/42", "review_state": "approved"}}},
+    {"caption": {"en": "a web project: dev server, a port held by another folder, the wrong node",
+                 "ru": "веб-проект: dev-сервер, порт занят другой папкой, не та версия node"},
+     "data": {"model": {"display_name": "Sonnet"}, "effort": None, "context_window": {"used_percentage": 18},
+              "rate_limits": {"five_hour": {"used_percentage": 12, "resets_at": NOW + 4 * 3600},
+                              "seven_day": {"used_percentage": 35, "resets_at": NOW + 4 * 86400}},
+              "prompt_cache": None},
+     "demo": {"project": {"root": "/work/shop", "kinds": ["web"], "ports": [3000, 5173], "node_dir": "/work/shop",
+                          "repo": "https://github.com/acme/shop"},
+              "listeners": [{"pid": "1", "ports": [5173], "cwd": "/work/shop", "name": "vite"},
+                            {"pid": "2", "ports": [3000], "cwd": "/work/api", "name": "node"}],
+              "node": {"key": "node", "have": 20, "need": "22", "source": ".nvmrc"},
+              "sessions": [{"sessionId": "demo", "bridgeSessionId": "session_01demo", "status": "busy"},
+                           {"sessionId": "other", "name": "kcalm", "status": "waiting"}]}},
+    {"caption": {"en": "an Android build on a busy Mac: a rebase with conflicts, swap, daemons, emulator",
+                 "ru": "сборка Android на загруженном Mac: rebase с конфликтами, swap, демоны, эмулятор"},
+     "data": {"context_window": {"used_percentage": 71}, "prompt_cache": None,
+              "rate_limits": {"five_hour": {"used_percentage": 30, "resets_at": NOW + 2 * 3600},
+                              "seven_day": {"used_percentage": 35, "resets_at": NOW + 4 * 86400}}},
+     "demo": {"project": {"root": "/work/app", "kinds": ["mobile"], "ports": [], "node_dir": None,
+                          "repo": "https://github.com/acme/app", "git_dir": "/work/app/.git"},
+              "git": {"branch": "(detached)", "ahead": 0, "behind": 0, "upstream": False, "changed": 4, "conflicts": 2},
+              "machine": {"total": 16 * ps.GB, "used": 14.6 * ps.GB, "swap": 2.1 * ps.GB, "gradle": 1, "kotlin": 1,
+                          "daemon_mem": 1.9 * ps.GB, "sims": 0, "emulator": True},
+              "sessions": [{"sessionId": "demo", "status": "busy"},
+                           {"sessionId": "done", "name": "authmeister", "status": "idle",
+                            "statusUpdatedAt": (NOW - 120) * 1000, "startedAt": (NOW - 3600) * 1000}]},
+     "git_op": {"op": "rebase", "branch": "login-fix", "step": "3/7"}},
+    {"caption": {"en": "back from a break: the cache expired, a proxy, a hot Mac, a full disk",
+                 "ru": "после перерыва: кэш истек, прокси, Mac греется, диск почти полон"},
+     "data": {"context_window": {"used_percentage": 64},
+              "rate_limits": {"five_hour": {"used_percentage": 6, "resets_at": NOW + 4.5 * 3600},
+                              "seven_day": {"used_percentage": 41, "resets_at": NOW + 4 * 86400}},
+              "prompt_cache": {"caching_observed": True, "warm": False, "ttl": "5m", "requests": 40,
+                               "recache_tokens_if_cold": 184000},
+              "transcript_path": "/work/demo.jsonl"},
+     "demo": {"git": {"branch": "main", "ahead": 0, "behind": 0, "upstream": True, "changed": 0},
+              "power": {"hot": True, "battery": 15}, "disk": 12 * ps.GB, "size": 180 * ps.MB},
+     "proxy": "KZ", "badges": [(2, ps.color("guard", ps.GREEN))]},
+]
+
+
 PALETTE = {"": "#d4d4d4", "2": "#7a7a7a", "31": "#f2777a", "32": "#99cc99", "33": "#ffcc66", "36": "#66cccc"}
 CW, LH, PAD, FONT = 8.4, 22, 16, 14
 TRACK_FILL = "#585858"
 BLOCKS = {"█": 1, "▏": 1 / 8, "▎": 2 / 8, "▍": 3 / 8, "▌": 4 / 8, "▋": 5 / 8, "▊": 6 / 8, "▉": 7 / 8, "░": 1}
 
 
-def lines(lang):
+def scene_lines(scene, lang):
     ps.OPTS.update({"lang": lang, "ascii": False, "color": True, "links": True})
-    ps.cached = lambda name, ttl, fn: DEMO[name.split("-")[0]]
+    demo = dict(BASE_DEMO, **scene.get("demo", {}))
+    data = {k: v for k, v in dict(BASE, **scene.get("data", {})).items() if v is not None}
+    saved = {name: getattr(ps, name) for name in ("cached", "git_op", "badges")}
+    saved_env = {k: os.environ.pop(k, None) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy",
+                                                       "PROMPTSILL_PROXY_LABEL", "PROMPTSILL_PROXY_DETAIL",
+                                                       "PROMPTSILL_PROXY_URL")}
+    if scene.get("proxy"):
+        os.environ.update(HTTPS_PROXY="http://127.0.0.1:7890", PROMPTSILL_PROXY_LABEL=scene["proxy"])
+    ps.cached = lambda name, ttl, fn: demo[name.split("-")[0]]
+    ps.git_op = lambda git_dir: scene.get("git_op")
+    ps.badges = lambda d, cwd, now=None: list(scene.get("badges", []))
     real = ps.time.time
     ps.time.time = lambda: NOW
     try:
-        return [ps.fit(ps.claude_line(DATA, NOW), 0), ps.fit(ps.work_line(DATA), 0)]
+        return [ps.fit(ps.claude_line(data, NOW), 0), ps.fit(ps.work_line(data), 0)]
     finally:
         ps.time.time = real
+        for name, fn in saved.items():
+            setattr(ps, name, fn)
+        for k in ("HTTPS_PROXY", "PROMPTSILL_PROXY_LABEL"):
+            os.environ.pop(k, None)
+        os.environ.update({k: v for k, v in saved_env.items() if v is not None})
 
 
 def runs(line):
@@ -109,10 +164,18 @@ def svg(rows):
 def main():
     out = os.path.join(ROOT, "docs")
     for lang in ("en", "ru"):
-        rendered = lines(lang)
+        rows, text = [], []
+        for i, scene in enumerate(SCENES):
+            if i:
+                rows.append([])
+            rows.append([("2", "# " + scene["caption"][lang])])
+            for line in scene_lines(scene, lang):
+                rows.append(runs(line))
+                text.append(ps.ESCAPES.sub("", line))
         with open(os.path.join(out, f"preview-{lang}.svg"), "w", encoding="utf-8") as f:
-            f.write(svg([runs(line) for line in rendered]))
-        print("\n".join(ps.ESCAPES.sub("", line) for line in rendered))
+            f.write(svg(rows))
+        print("\n".join(text))
+        print(f"widest: {max(len(t) for t in text)} columns")
     return 0
 
 
