@@ -788,7 +788,7 @@ def claude_line(d, now=None):
 def dev_parts(proj):
     parts = []
     root = proj["root"]
-    servers = cached("listeners", 5, listeners)
+    servers = cached("listeners", 15, listeners)
     mine = [s for s in servers if inside(s["cwd"], root)]
     for s in mine:
         text = f"{s['name']} :{','.join(map(str, s['ports'][:2]))}"
@@ -974,7 +974,7 @@ def work_line(d):
         proj[key] = proj.get(key) if isinstance(proj.get(key), list) else []
     kinds = set(proj["kinds"])
     g = obj(safe(lambda: cached("git-" + cwd, 3, lambda: git(cwd)))) or None
-    m = obj(safe(lambda: cached("machine", 5, machine)))
+    m = obj(safe(lambda: cached("machine", 15, machine)))
     return collect([
         lambda: worktree_part(d, g),
         lambda: git_parts(d, proj, g),
