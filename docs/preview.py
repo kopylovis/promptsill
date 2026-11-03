@@ -2,7 +2,10 @@ import importlib.machinery
 import importlib.util
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from html import escape
 
@@ -98,7 +101,7 @@ def scene_lines(scene, lang):
                                                        "PROMPTSILL_PROXY_URL")}
     if scene.get("proxy"):
         os.environ.update(HTTPS_PROXY="http://127.0.0.1:7890", PROMPTSILL_PROXY_LABEL=scene["proxy"])
-    ps.cached = lambda name, ttl, fn: demo[name.split("-")[0]]
+    ps.cached = lambda name, ttl, fn, background=False: demo[name.split("-")[0]]
     ps.git_op = lambda git_dir: scene.get("git_op")
     ps.badges = lambda d, cwd, now=None: list(scene.get("badges", []))
     real = ps.time.time
@@ -161,6 +164,25 @@ def svg(rows):
     return "\n".join(parts) + "\n"
 
 
+CHROME = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome", "chromium"]
+
+
+def png(svg_path, scale=2):
+    """A PNG at twice the size next to the SVG: GitHub opens it on click, and it can be zoomed."""
+    chrome = next((c for c in CHROME if os.path.exists(c) or shutil.which(c)), None)
+    if not chrome:
+        print(f"no Chrome to render {os.path.basename(svg_path)} as PNG, skipped")
+        return
+    with open(svg_path, encoding="utf-8") as f:
+        m = re.search(r'width="(\d+)" height="(\d+)"', f.read())
+    width, height = m.group(1), m.group(2)
+    with tempfile.TemporaryDirectory() as profile:
+        subprocess.run([chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", f"--user-data-dir={profile}",
+                        f"--force-device-scale-factor={scale}", f"--window-size={width},{height}",
+                        f"--screenshot={svg_path[:-4]}.png", "file://" + svg_path],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
+
+
 def main():
     out = os.path.join(ROOT, "docs")
     for lang in ("en", "ru"):
@@ -172,8 +194,10 @@ def main():
             for line in scene_lines(scene, lang):
                 rows.append(runs(line))
                 text.append(ps.ESCAPES.sub("", line))
-        with open(os.path.join(out, f"preview-{lang}.svg"), "w", encoding="utf-8") as f:
+        path = os.path.join(out, f"preview-{lang}.svg")
+        with open(path, "w", encoding="utf-8") as f:
             f.write(svg(rows))
+        png(path)
         print("\n".join(text))
         print(f"widest: {max(len(t) for t in text)} columns")
     return 0
