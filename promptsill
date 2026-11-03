@@ -994,7 +994,17 @@ SEP = " · "
 
 
 def visible(text):
-    return len(ESCAPES.sub("", text))
+    """Terminal columns: CJK and most emoji take two, combining marks and variation selectors none."""
+    text = ESCAPES.sub("", text)
+    if text.isascii():
+        return len(text)
+    import unicodedata
+    width = 0
+    for ch in text:
+        if unicodedata.combining(ch) or "\ufe00" <= ch <= "\ufe0f" or ch == "\u200d":
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
 
 
 def fit(parts, cols):

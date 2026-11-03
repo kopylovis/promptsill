@@ -110,6 +110,16 @@ class Render(unittest.TestCase):
         self.assertEqual(plain(ps.fit(parts, 10)), "context 42%")
         self.assertEqual(plain(ps.fit(parts, 4)), "context 42%")
 
+    def test_wide_characters(self):
+        self.assertEqual(ps.visible("main"), 4)
+        self.assertEqual(ps.visible("機能"), 4)
+        self.assertEqual(ps.visible("fix 🚀"), 6)
+        self.assertEqual(ps.visible("café"), 4)
+        self.assertEqual(ps.visible("e\u0301"), 1)
+        parts = [(1, "context 42%"), (3, "機能ブランチ")]
+        self.assertEqual(plain(ps.fit(parts, 4 + 11 + 3 + 11)), "context 42%")
+        self.assertEqual(plain(ps.fit(parts, 4 + 11 + 3 + 12)), "context 42% · 機能ブランチ")
+
     def test_fit_ignores_link_width(self):
         reset_opts()
         linked = ps.link("main", "https://example.com/" + "x" * 200)
