@@ -27,7 +27,7 @@ COLORS = {"green": GREEN, "yellow": YELLOW, "red": RED, "cyan": CYAN, "dim": DIM
 MISS_SHOWN = 300
 DISK_LOW = 15 * GB
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400, "daily": 86400, "weekly": 7 * 86400, "monthly": 30 * 86400}
-OPTS = {"lang": "en", "ascii": False, "color": True, "links": True}
+OPTS = {"lang": "en", "ascii": False, "color": True, "links": True, "session_name": True}
 
 TEXT = {
     "en": {
@@ -263,6 +263,7 @@ def configure(lang=None):
     OPTS["ascii"] = bool(conf.get("ascii")) or os.environ.get("PROMPTSILL_ASCII", "") not in ("", "0")
     OPTS["color"] = not os.environ.get("NO_COLOR") and conf.get("color", True) is not False
     OPTS["links"] = conf.get("links", True) is not False
+    OPTS["session_name"] = conf.get("session_name", True) is not False
 
 
 def memory():
@@ -870,10 +871,22 @@ def activity_parts(d):
     return parts
 
 
+def shorten(text, limit):
+    """Cut on a word boundary and mark the cut, so a long title doesn't end mid-word."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1]
+    space = cut.rfind(" ")
+    cut = cut[:space] if space >= limit // 2 else cut
+    return cut.rstrip(" ,.;:-") + ("..." if OPTS["ascii"] else "…")
+
+
 def name_part(d):
-    """The session's name from --name, /rename or Claude's own title: tells parallel sessions apart."""
-    name = clean(d.get("session_name"), 30)
-    return (4, name) if name else None
+    """The session's name from --name, /rename or Claude's own title, in the language of the conversation."""
+    if not OPTS["session_name"]:
+        return None
+    name = shorten(clean(d.get("session_name"), 200), 32)
+    return (4, color(name, DIM)) if name else None
 
 
 def work_done_parts(d):

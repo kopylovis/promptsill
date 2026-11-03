@@ -32,7 +32,7 @@ The second line is about the project you're in and the machine it runs on. Apart
 The first line is about Claude Code itself.
 
 - **Model, effort and fast mode.** `Opus xhigh fast`. On a narrow terminal only the model name stays.
-- **Session name** from `--name`, `/rename` or Claude's own title, so parallel sessions are easy to tell apart.
+- **Session name** from `--name`, `/rename` or Claude's own title, dimmed and cut on a word at 32 characters, so parallel sessions are easy to tell apart. `"session_name": false` in the config hides it.
 - **Modes that differ from a plain session:** the vim mode (`NORMAL`, `INSERT`), `agent security-reviewer` when started with `--agent`, `style Explanatory` for a custom output style, and `thinking off`. `install` sets `hideVimModeIndicator`, so the vim mode isn't shown twice.
 - **Context** as a bar with 1/8-cell precision, followed by the tokens in the window and its size: `42% 420k/1M`. With a 1M window the percentage alone hides how much room is left.
 - **Limit pace.** For the 5-hour and weekly limits, promptsill compares how much you've used with how much of the window has passed. 60% in the first hour of five is a problem; 60% in the last hour is fine. Colors follow the pace, not the raw percentage. `+23%` means you're 23 points ahead of an even pace, and `runs out at 15:10` says when you'll hit the limit if you keep going like this.
@@ -111,13 +111,15 @@ Optional `~/.config/promptsill/config.json`:
   "lang": "en",
   "links": true,
   "color": true,
-  "ascii": false
+  "ascii": false,
+  "session_name": true
 }
 ```
 
 - `links`: clickable links on the branch, review state, dev servers, Remote Control and badges ([OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda); iTerm2, Kitty, WezTerm, Ghostty and others, usually with Cmd-click or Ctrl-click; macOS Terminal doesn't support them).
 - `color`: `false` turns colors off; so does the `NO_COLOR` environment variable.
 - `ascii`: `[##---]` bars for fonts without block characters; also `PROMPTSILL_ASCII=1`.
+- `session_name`: `false` hides the session name. Claude Code titles a session in the language you write in, so with English labels and a Russian conversation the title is Russian.
 
 ## Badges from hooks and scripts
 
