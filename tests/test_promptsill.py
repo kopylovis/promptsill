@@ -148,6 +148,25 @@ class Context(unittest.TestCase):
                          ["16k", "200k", "1M", "1.2M"])
 
 
+class Modes(unittest.TestCase):
+    def setUp(self):
+        reset_opts()
+
+    def texts(self, d):
+        return [plain(p[1]) for p in ps.mode_parts(d)]
+
+    def test_plain_session_shows_nothing(self):
+        self.assertEqual(self.texts({"output_style": {"name": "default"}, "thinking": {"enabled": True}}), [])
+
+    def test_everything_unusual(self):
+        d = {"vim": {"mode": "NORMAL"}, "agent": {"name": "security-reviewer"}, "output_style": {"name": "Explanatory"},
+             "thinking": {"enabled": False}}
+        self.assertEqual(self.texts(d), ["NORMAL", "agent security-reviewer", "style Explanatory", "thinking off"])
+        reset_opts(lang="ru")
+        self.assertEqual(self.texts(d), ["NORMAL", "агент security-reviewer", "стиль Explanatory",
+                                         "thinking выключен"])
+
+
 class Model(unittest.TestCase):
     def setUp(self):
         reset_opts()
@@ -738,6 +757,7 @@ class Install(unittest.TestCase):
         line = self.read()["statusLine"]
         self.assertIn("promptsill", line["command"])
         self.assertEqual(line["refreshInterval"], 10)
+        self.assertIs(line["hideVimModeIndicator"], True)
         r = self.run_cli("uninstall")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn("statusLine", self.read())
