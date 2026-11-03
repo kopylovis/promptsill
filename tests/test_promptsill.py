@@ -1,3 +1,4 @@
+import atexit
 import importlib.machinery
 import importlib.util
 import json
@@ -13,6 +14,8 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "promptsill")
 TMP = tempfile.mkdtemp(prefix="promptsill-test-")
+atexit.register(shutil.rmtree, TMP, True)
+sys.dont_write_bytecode = True
 os.environ["XDG_CACHE_HOME"] = os.path.join(TMP, "cache")
 os.environ["XDG_CONFIG_HOME"] = os.path.join(TMP, "config")
 os.environ["XDG_STATE_HOME"] = os.path.join(TMP, "state")
@@ -105,6 +108,7 @@ class Render(unittest.TestCase):
         self.assertEqual(plain(ps.fit(parts, 36)), "context 42% · Opus · week 35%")
         self.assertEqual(plain(ps.fit(parts, 30)), "context 42% · week 35%")
         self.assertEqual(plain(ps.fit(parts, 10)), "context 42%")
+        self.assertEqual(plain(ps.fit(parts, 4)), "context 42%")
 
     def test_fit_ignores_link_width(self):
         reset_opts()
@@ -789,7 +793,8 @@ class Badges(unittest.TestCase):
         env = {"XDG_STATE_HOME": os.environ["XDG_STATE_HOME"]}
         self.assertEqual(cli("badge", "set", "mnrh-x", "hello", "world", "--color", "cyan", "--ttl", "60",
                              env=env).returncode, 0)
-        data = json.load(open(os.path.join(ps.BADGES, "mnrh-x.json")))
+        with open(os.path.join(ps.BADGES, "mnrh-x.json")) as f:
+            data = json.load(f)
         self.assertEqual(data["text"], "hello world")
         self.assertEqual(data["color"], "cyan")
         self.assertIn("mnrh-x", cli("badge", "list", env=env).stdout)
