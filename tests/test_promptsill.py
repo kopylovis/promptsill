@@ -24,6 +24,7 @@ loader = importlib.machinery.SourceFileLoader("promptsill", SCRIPT)
 spec = importlib.util.spec_from_loader("promptsill", loader)
 ps = importlib.util.module_from_spec(spec)
 loader.exec_module(ps)
+ps.BACKGROUND = False
 
 ESC = "\033"
 
@@ -276,6 +277,34 @@ class CacheFiles(unittest.TestCase):
         self.assertEqual(ps.cached("git-/tmp/round-trip", 60, fn), {"branch": "фича"})
         self.assertEqual(ps.cached("git-/tmp/round-trip", 60, fn), {"branch": "фича"})
         self.assertEqual(len(calls), 1)
+
+    def test_stale_value_now_fresh_one_in_background(self):
+        path = ps.cache_path("disk")
+        ps.write_json(path, 1)
+        os.utime(path, (time.time() - 100,) * 2)
+        ps.BACKGROUND = True
+        try:
+            self.assertEqual(ps.cached("disk", 30, lambda: self.fail("computed on the hot path"), background=True), 1)
+        finally:
+            ps.BACKGROUND = False
+        for _ in range(100):
+            if not os.path.exists(path + ".lock"):
+                break
+            time.sleep(0.05)
+        self.assertFalse(os.path.exists(path + ".lock"))
+        with open(path) as f:
+            self.assertNotEqual(json.load(f), 1)
+        self.assertLess(time.time() - os.path.getmtime(path), 30)
+
+    def test_too_stale_is_computed_now(self):
+        path = ps.cache_path("power")
+        ps.write_json(path, {"old": True})
+        os.utime(path, (time.time() - 30 - ps.STALE_SERVED - 5,) * 2)
+        ps.BACKGROUND = True
+        try:
+            self.assertEqual(ps.cached("power", 30, lambda: {"new": True}, background=True), {"new": True})
+        finally:
+            ps.BACKGROUND = False
 
     def test_prune_drops_stale_files_once_a_day(self):
         os.makedirs(ps.CACHE, exist_ok=True)
