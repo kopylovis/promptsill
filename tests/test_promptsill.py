@@ -421,6 +421,41 @@ class Update(unittest.TestCase):
         self.assertLess(ps.version_tuple("2.1.99"), ps.version_tuple("2.1.100"))
 
 
+class Subagents(unittest.TestCase):
+    now = 1_800_000_000
+
+    def setUp(self):
+        reset_opts()
+
+    def row(self, cols=120, **kw):
+        task = dict({"id": "a1", "agentType": "Explore", "status": "running", "description": "Find config files",
+                     "startTime": (self.now - 83) * 1000, "model": "claude-sonnet-5-5", "effort": "high",
+                     "contextWindowSize": 200000, "tokenCount": 68000, "tokenSamples": [1000, 30000, 68000]}, **kw)
+        return plain(ps.subagent_row(task, cols, self.now))
+
+    def test_full_row(self):
+        self.assertEqual(self.row(), "Explore · Find config files · Sonnet 5.5 high · 1m · ▁▄█ 68k 34%")
+
+    def test_finished_and_narrow(self):
+        self.assertEqual(self.row(status="completed", tokenSamples=[]),
+                         "Explore · Find config files · done · Sonnet 5.5 high · 68k 34%")
+        narrow = self.row(cols=40)
+        self.assertLessEqual(ps.visible(narrow), 40, narrow)
+        self.assertTrue(narrow.endswith("68k 34%"), narrow)
+
+    def test_model_names(self):
+        self.assertEqual([ps.model_name(m) for m in ("claude-opus-5-5", "claude-haiku-4-5-20251001", "gpt-x", None)],
+                         ["Opus 5.5", "Haiku 4.5", "gpt-x", ""])
+
+    def test_cli_writes_one_json_line_per_task(self):
+        stdin = json.dumps({"columns": 100, "tasks": [{"id": "x", "agentType": "Explore", "status": "running"},
+                                                       {"no": "id"}, "junk"]})
+        r = cli("subagents", stdin=stdin)
+        lines = [json.loads(line) for line in r.stdout.splitlines()]
+        self.assertEqual([o["id"] for o in lines], ["x"])
+        self.assertEqual(cli("subagents", stdin="garbage").returncode, 0)
+
+
 class Links(unittest.TestCase):
     def test_remote_to_web(self):
         self.assertEqual(ps.web_url("git@github.com:kopylovis/promptsill.git"), "https://github.com/kopylovis/promptsill")
@@ -857,6 +892,21 @@ class Install(unittest.TestCase):
         self.write({"statusLine": {"type": "command", "command": "other"}})
         self.assertEqual(self.run_cli("uninstall").returncode, 0)
         self.assertEqual(self.read()["statusLine"]["command"], "other")
+
+    def test_subagent_line_installed_and_removed(self):
+        self.assertEqual(self.run_cli("install").returncode, 0)
+        sub = self.read()["subagentStatusLine"]
+        self.assertTrue(sub["command"].endswith(" subagents"), sub)
+        self.assertEqual(self.run_cli("uninstall").returncode, 0)
+        self.assertNotIn("subagentStatusLine", self.read())
+
+    def test_foreign_subagent_line_is_kept(self):
+        mine = {"type": "command", "command": "~/bin/agents.sh"}
+        self.write({"subagentStatusLine": mine})
+        self.assertEqual(self.run_cli("install").returncode, 0)
+        self.assertEqual(self.read()["subagentStatusLine"], mine)
+        self.run_cli("uninstall")
+        self.assertEqual(self.read()["subagentStatusLine"], mine)
 
     def test_symlinked_settings_stay_a_symlink(self):
         target = os.path.join(self.dir, "dotfiles-settings.json")
