@@ -104,12 +104,21 @@ class Render(unittest.TestCase):
         self.assertIsNone(ps.node_check(folder))
 
     def test_fit_shortens_then_drops(self):
-        parts = [(1, "context ██▏░░ 42%", "context 42%"), (4, "Opus"), (3, "week 35%")]
-        self.assertEqual(plain(ps.fit(parts, 0)), "context ██▏░░ 42% · Opus · week 35%")
-        self.assertEqual(plain(ps.fit(parts, 36)), "context 42% · Opus · week 35%")
-        self.assertEqual(plain(ps.fit(parts, 30)), "context 42% · week 35%")
+        parts = [(1, "context ██▏░░ 42%", "context 42%"), (3, "week 35%, resets Sun 14:00", "week 35%"),
+                 (2, "proxy")]
+        self.assertEqual(plain(ps.fit(parts, 0)), "context ██▏░░ 42% · week 35%, resets Sun 14:00 · proxy")
+        self.assertEqual(plain(ps.fit(parts, 40)), "context ██▏░░ 42% · week 35% · proxy")
+        self.assertEqual(plain(ps.fit(parts, 34)), "context 42% · week 35% · proxy")
+        self.assertEqual(plain(ps.fit(parts, 30)), "context 42% · proxy")
         self.assertEqual(plain(ps.fit(parts, 10)), "context 42%")
         self.assertEqual(plain(ps.fit(parts, 4)), "context 42%")
+
+    def test_fit_drops_extras_before_shortening_limits(self):
+        parts = [(3, "Opus high", "Opus"), (4, "session name"), (1, "5h ▎ 4%, resets at 19:40", "5h 4%"),
+                 (3, "week 36%, resets Sun 14:00", "week 36%"), (4, "other-session done"), (5, "8m")]
+        self.assertEqual(plain(ps.fit(parts, 84)), "Opus high · session name · 5h ▎ 4%, resets at 19:40 · "
+                                                   "week 36%, resets Sun 14:00")
+        self.assertEqual(plain(ps.fit(parts, 75)), "Opus high · 5h ▎ 4%, resets at 19:40 · week 36%, resets Sun 14:00")
 
     def test_wide_characters(self):
         self.assertEqual(ps.visible("main"), 4)

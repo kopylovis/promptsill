@@ -789,7 +789,7 @@ def model_part(d):
         text += " " + color(effort, CYAN)
     if d.get("fast_mode") is True:
         text += " " + color(t("fast"), YELLOW)
-    return (4, text, color(model, CYAN))
+    return (3, text, color(model, CYAN))
 
 
 VIM_COLORS = {"INSERT": GREEN, "NORMAL": CYAN, "VISUAL": YELLOW, "VISUAL LINE": YELLOW}
@@ -1242,21 +1242,36 @@ def visible(text):
     return width
 
 
+# Parts at this priority and below (the session name, finished sessions, the running tool) go
+# before the limits and the context lose their bars and reset times.
+EXTRA = 4
+
+
 def fit(parts, cols):
     parts = [(p[0], p[1], p[2] if len(p) > 2 else None) for p in parts]
     width = lambda ps: sum(visible(p[1]) for p in ps) + len(SEP) * max(0, len(ps) - 1)
     limit = max(cols - 4, 1) if cols else 0
-    if limit:
-        for i in sorted(range(len(parts)), key=lambda i: (-parts[i][0], -i)):
+
+    def shorten(level):
+        for i in reversed(range(len(parts))):
             if width(parts) <= limit:
-                break
-            if parts[i][2] is not None:
-                parts[i] = (parts[i][0], parts[i][2], None)
-        while len(parts) > 1 and width(parts) > limit:
-            worst = max(p[0] for p in parts)
-            if worst <= 1:
-                break
-            parts.pop(max(i for i, p in enumerate(parts) if p[0] == worst))
+                return
+            if parts[i][0] == level and parts[i][2] is not None:
+                parts[i] = (level, parts[i][2], None)
+
+    def drop(level):
+        while len(parts) > 1 and width(parts) > limit and any(p[0] == level for p in parts):
+            parts.pop(max(i for i, p in enumerate(parts) if p[0] == level))
+
+    if limit:
+        levels = sorted({p[0] for p in parts}, reverse=True)
+        for level in levels:
+            shorten(level)
+            if level >= EXTRA:
+                drop(level)
+        for level in levels:
+            if 1 < level < EXTRA:
+                drop(level)
     return color(SEP, DIM).join(p[1] for p in parts)
 
 
