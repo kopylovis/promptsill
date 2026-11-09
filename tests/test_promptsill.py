@@ -276,9 +276,10 @@ class Pace(unittest.TestCase):
         lim = {"used_percentage": 95, "resets_at": self.now + 3600}
         self.assertIn(ESC + "[31m", ps.limit_part("spend_limit", lim, self.now)[1])
 
-    def test_week_hides_reset_when_calm(self):
+    def test_week_shows_reset_when_calm(self):
         part = ps.limit_part("seven_day", self.lim(20, 3 * 86400), self.now)
-        self.assertEqual(plain(part[1]), "week 20%")
+        self.assertTrue(plain(part[1]).startswith("week 20%, resets "), plain(part[1]))
+        self.assertEqual(plain(part[2]), "week 20%")
 
 
 class Cache(unittest.TestCase):

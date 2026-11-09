@@ -7,7 +7,7 @@
 <a href="docs/preview-en.png"><img src="docs/preview-en.svg" alt="promptsill status line in four situations. An ordinary hour: context with token counts, limit pace, cache timer, an approved pull request. A web project: Remote Control, a session waiting for you, a dev server, a port held by another folder, the wrong node version. An Android build on a busy Mac: Claude's todo progress and running tool, a rebase with conflicts, memory, swap, Gradle and Kotlin daemons, the emulator. Back from a break: a proxy, an expired cache, a newer Claude Code installed, a guard badge, overheating, low battery, low disk, a large session file"></a>
 
 ```text
-Opus high · context ██▏   42% 84k/200k · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35% · cache 44s
+Opus high · context ██▏   42% 84k/200k · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35%, resets Sun 14:00 · cache 44s
 checkout-redesign ↑2 ±3 · approved · memory 9.4/16 GB
 ```
 
