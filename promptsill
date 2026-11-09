@@ -631,7 +631,7 @@ def limit_part(key, lim, now):
         when = until(float(lim.get("resets_at")), now)
     except (TypeError, ValueError):
         when = ""
-    if when and (key == "five_hour" or pct >= 50 or code):
+    if when and (key in ("five_hour", "seven_day") or pct >= 50 or code):
         extra.append(t("resets", when=when))
     text = head + color("".join(", " + e for e in extra), code)
     prio = 1 if key == "five_hour" or code else 3
