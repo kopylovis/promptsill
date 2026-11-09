@@ -46,7 +46,7 @@ The first line is about Claude Code itself.
 - **Lines and time.** `+156 −23` lines changed and how long the session has run, `2h 15m`. The first to go on a narrow terminal.
 - **Your other sessions.** `kcalm waits for you` when another Claude Code session on this machine is stuck on a permission prompt or a question, and `authmeister done` for ten minutes after one finishes its turn. Three or more are counted: `3 sessions wait for you`. This also comes from `~/.claude/sessions/`.
 
-When the terminal is narrow, promptsill shortens the parts first, then drops the least important ones. The limits, context and branch stay. CJK characters and emoji count as two columns.
+When the terminal is narrow, the session name, finished sessions, the running tool and the lines and time go first. Then the other parts are shortened, and only after that are the least important dropped. The limits, context and branch stay. CJK characters and emoji count as two columns.
 
 ## Subagent rows
 
