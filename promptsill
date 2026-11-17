@@ -1402,7 +1402,7 @@ def install_codex_footer(force=False):
             request(1, "initialize", {"clientInfo": {"name": "promptsill", "version": VERSION}})
             send({"method": "initialized"})
             result = request(2, "config/read", {"includeLayers": True})
-            current = result["config"].get("tui", {}).get("status_line")
+            current = obj(result["config"].get("tui")).get("status_line")
             if current is not None and not force:
                 return False
             params = {"keyPath": "tui.status_line", "value": CODEX_FOOTER, "mergeStrategy": "upsert"}
