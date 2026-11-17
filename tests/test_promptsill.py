@@ -42,8 +42,10 @@ def reset_opts(**kw):
 
 class Codex(unittest.TestCase):
     def test_installer_preserves_custom_fields_and_writes_defaults(self):
-        for tui in ({"status_line": []}, {"status_line": ["model"]}, None):
+        for tui in ({"status_line": []}, {"status_line": ["model"]}, {"status_line": ps.CODEX_FOOTER},
+                    {"status_line": ps.OLD_CODEX_FOOTER}, None):
             with self.subTest(tui=tui):
+                should_write = tui is None or tui["status_line"] == ps.OLD_CODEX_FOOTER
                 server = MagicMock()
                 server.__enter__.return_value = server
                 server.stdin = io.StringIO()
@@ -55,10 +57,10 @@ class Codex(unittest.TestCase):
                 ))
                 with patch.object(ps.shutil, "which", return_value="/test/codex"), \
                      patch.object(ps.subprocess, "Popen", return_value=server):
-                    self.assertEqual(ps.install_codex_footer(), tui is None)
+                    self.assertEqual(ps.install_codex_footer(), should_write)
                 requests = [json.loads(line) for line in server.stdin.getvalue().splitlines()]
                 writes = [request["params"] for request in requests if request["method"] == "config/value/write"]
-                if tui is None:
+                if should_write:
                     self.assertEqual(writes[0]["keyPath"], "tui.status_line")
                     self.assertEqual(writes[0]["value"], ps.CODEX_FOOTER)
                     self.assertEqual(writes[0]["expectedVersion"], "version")
@@ -78,15 +80,31 @@ class Codex(unittest.TestCase):
             events = [{"type": "session_meta", "payload": {"cwd": str(folder), "id": sid}},
                       {"type": "turn_context", "payload": {"model": "gpt-test", "effort": "high"}},
                       {"type": "event_msg", "payload": {"type": "token_count", "rate_limits": rate,
-                       "info": {"model_context_window": 10000, "last_token_usage": {"total_tokens": 4000}}}},
+                       "info": {"model_context_window": 10000,
+                                "last_token_usage": {"total_tokens": 4000, "cached_input_tokens": 2000},
+                                "total_token_usage": {"total_tokens": 18000}}}},
                       {"type": "event_msg", "payload": {"type": "token_count", "rate_limits": None}}]
             path.write_text("\n".join(map(json.dumps, events)) + "\n{partial")
             self.assertEqual(ps.codex_snapshot(home, None), {"cwd": home})
             data = ps.codex_snapshot(home, sid)
             self.assertEqual(data, ps.codex_snapshot(os.path.realpath(folder), None))
             line = plain(ps.fit(ps.codex_line(data), 0))
-            for text in ("Codex", "gpt-test high", "context", "40%", "5h", "25%"):
+            for text in ("Codex", "gpt-test high", "context", "40%", "5h", "25%", "cached 2k", "18k session tokens"):
                 self.assertIn(text, line)
+
+    def test_watch_redraws_updated_metrics_and_restores_terminal(self):
+        output = io.StringIO()
+        output.isatty = lambda: True
+        with patch.object(ps.sys, "stdout", output), \
+             patch.object(ps, "codex_snapshot", return_value={}), \
+             patch.object(ps, "render_codex", side_effect=["first\nproject", "second\nproject"]), \
+             patch.object(ps.time, "sleep", side_effect=[None, KeyboardInterrupt]):
+            self.assertEqual(ps.watch_codex("/test", None), 0)
+        string = output.getvalue()
+        self.assertIn("\033[H\033[Jfirst\nproject", string)
+        self.assertIn("\033[H\033[Jsecond\nproject", string)
+        self.assertTrue(string.startswith("\033[?1049h\033[?25l"))
+        self.assertTrue(string.endswith("\033[?25h\033[?1049l"))
 
 
 class Render(unittest.TestCase):
