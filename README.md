@@ -100,6 +100,17 @@ promptsill --version
 
 `install` never replaces another status line unless you pass `--force`. When you do, the old one is saved and `uninstall` restores it. Before every change, `settings.json` is copied to `settings.json.promptsill-backup`. `CLAUDE_CONFIG_DIR` is respected.
 
+## Codex
+
+Run `promptsill codex` for a terminal snapshot. It shows the model, context and rate-limit windows from the local
+Codex session when those fields are available, alongside the usual project and machine status. Inside a Codex
+session it uses `CODEX_THREAD_ID` when available. Otherwise it picks the most recently updated session in the
+current folder. Use `--session UUID` to select a session or `--cwd DIR` to look in another folder.
+
+The command reads session files under `CODEX_HOME` (by default `~/.codex`). It uses the latest saved metrics and
+makes no network requests. If a session file or its metrics are unavailable, you still get project and machine
+status. For the footer inside Codex, configure its built-in fields with `/statusline`.
+
 ## Settings
 
 Labels are in English by default, and in Russian when your locale (`LC_ALL`, `LC_MESSAGES` or `LANG`) is Russian. To choose explicitly, use `install --lang ru`, the `PROMPTSILL_LANG` environment variable, or the config file.

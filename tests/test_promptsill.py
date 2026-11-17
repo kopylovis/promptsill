@@ -10,6 +10,8 @@ import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "promptsill")
@@ -35,6 +37,31 @@ def plain(text):
 
 def reset_opts(**kw):
     ps.OPTS.update({"lang": "en", "ascii": False, "color": True, "links": True, "session_name": True}, **kw)
+
+
+class Codex(unittest.TestCase):
+    def test_snapshot_uses_requested_session_and_keeps_latest_metrics(self):
+        reset_opts()
+        sid = "11111111-2222-4333-8444-555555555555"
+        with tempfile.TemporaryDirectory(dir=TMP) as home, patch.dict(os.environ, {"CODEX_HOME": home}):
+            sessions = Path(home) / "sessions/2026/11/17"
+            sessions.mkdir(parents=True)
+            folder = Path(home) / "repo"
+            folder.mkdir()
+            path = sessions / f"rollout-2026-11-17T00-00-00-{sid}.jsonl"
+            rate = {"primary": {"window_minutes": 300, "used_percent": 25, "resets_at": int(time.time()) + 3600}}
+            events = [{"type": "session_meta", "payload": {"cwd": str(folder), "id": sid}},
+                      {"type": "turn_context", "payload": {"model": "gpt-test", "effort": "high"}},
+                      {"type": "event_msg", "payload": {"type": "token_count", "rate_limits": rate,
+                       "info": {"model_context_window": 10000, "last_token_usage": {"total_tokens": 4000}}}},
+                      {"type": "event_msg", "payload": {"type": "token_count", "rate_limits": None}}]
+            path.write_text("\n".join(map(json.dumps, events)) + "\n{partial")
+            self.assertEqual(ps.codex_snapshot(home, None), {"cwd": home})
+            data = ps.codex_snapshot(home, sid)
+            self.assertEqual(data, ps.codex_snapshot(os.path.realpath(folder), None))
+            line = plain(ps.fit(ps.codex_line(data), 0))
+            for text in ("Codex", "gpt-test high", "context", "40%", "5h", "25%"):
+                self.assertIn(text, line)
 
 
 class Render(unittest.TestCase):

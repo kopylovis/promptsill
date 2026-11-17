@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 from urllib.parse import quote
 
 VERSION = "0.6.3"
@@ -1287,6 +1288,89 @@ def render(d, cols=0):
     return "\n".join(line for line in lines if line)
 
 
+def codex_rollout(cwd, session):
+    home = Path(os.environ.get("CODEX_HOME") or Path(HOME) / ".codex").expanduser()
+    if session and not re.fullmatch(r"[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}", session):
+        raise ValueError("expected a Codex session UUID")
+    candidates = []
+    for path in (home / "sessions").glob("*/*/*/rollout-*.jsonl"):
+        if session and not path.name.lower().endswith(f"-{session.lower()}.jsonl"):
+            continue
+        try:
+            candidates.append((path.stat().st_mtime_ns, path))
+        except OSError:
+            continue
+    for _, path in sorted(candidates, reverse=True):
+        try:
+            with path.open("rb") as f:
+                first = obj(json.loads(f.readline(2 * MB)))
+                meta = obj(first.get("payload"))
+                folder = meta.get("cwd")
+                if first.get("type") != "session_meta" or not (session or
+                        isinstance(folder, str) and os.path.realpath(folder) == cwd):
+                    continue
+                offset = max(0, f.seek(0, os.SEEK_END) - MB)
+                f.seek(max(0, offset - 1))
+                if offset and f.read(1) != b"\n":
+                    f.readline()
+                return path, meta, f.read(MB).splitlines()
+        except (OSError, ValueError):
+            continue
+    return None, {}, []
+
+
+def codex_snapshot(cwd, session):
+    path, meta, lines = codex_rollout(cwd, session)
+    if not path:
+        return {"cwd": cwd}
+    folder = meta.get("cwd")
+    d = {"cwd": folder if isinstance(folder, str) and os.path.isdir(folder) else cwd,
+         "session_id": meta.get("id") or meta.get("session_id"), "transcript_path": str(path)}
+    turn, info, limits = {}, {}, {}
+    for line in reversed(lines):
+        try:
+            entry = obj(json.loads(line))
+        except ValueError:
+            continue
+        payload = obj(entry.get("payload"))
+        if not turn and entry.get("type") == "turn_context":
+            turn = payload
+        if entry.get("type") == "event_msg" and payload.get("type") == "token_count":
+            info = info or obj(payload.get("info"))
+            rate = obj(payload.get("rate_limits"))
+            if rate.get("limit_id") in (None, "codex"):
+                limits = limits or rate
+        if turn and info and limits:
+            break
+    model = turn.get("model")
+    if isinstance(model, str) and re.fullmatch(r"[a-zA-Z0-9._/-]{1,80}", model):
+        d["model"] = {"display_name": model}
+        d["effort"] = {"level": turn.get("effort")}
+    size = info.get("model_context_window")
+    used = obj(info.get("last_token_usage")).get("total_tokens")
+    if isinstance(size, int) and size > 0 and isinstance(used, int) and used >= 0:
+        d["context_window"] = {"used_percentage": min(100, 100 * used / size),
+                               "context_window_size": size, "total_input_tokens": used}
+    durations = {300: "five_hour", 10080: "seven_day"}
+    d["rate_limits"] = {}
+    for name in ("primary", "secondary"):
+        window = obj(limits.get(name))
+        duration = window.get("window_minutes")
+        if isinstance(duration, int) and duration in durations:
+            d["rate_limits"][durations[duration]] = {"used_percentage": window.get("used_percent"),
+                                                      "resets_at": window.get("resets_at")}
+    return d
+
+
+def codex_line(d):
+    parts = [(1, color("Codex", CYAN))]
+    limits = obj(d.get("rate_limits"))
+    now = time.time()
+    return parts + collect([lambda: model_part(d), proxy_part, lambda: context_part(d),
+                            *(lambda key=key: limit_part(key, obj(limits.get(key)), now)
+                              for key in ("five_hour", "seven_day"))])
+
+
 def sample(cwd):
     now = time.time()
     return {"model": {"display_name": "Opus"}, "effort": {"level": "high"}, "workspace": {"current_dir": cwd},
@@ -1442,7 +1526,7 @@ def uninstall(opts):
     return 0
 
 
-USAGE = """promptsill — a status line for Claude Code
+USAGE = """promptsill for Claude Code and Codex
 
   promptsill [--lang en|ru]       read Claude Code's status JSON on stdin, print the line
   promptsill install [--force] [--lang en|ru] [--settings FILE]
@@ -1453,6 +1537,8 @@ USAGE = """promptsill — a status line for Claude Code
                                   rows for the agent panel (subagentStatusLine), set up by install
   promptsill preview [--lang en|ru] [--width N]
                                   render sample data for the current folder
+  promptsill codex [--cwd DIR] [--session UUID] [--lang en|ru]
+                                  show the Codex session and project status in the terminal
   promptsill badge set NAME TEXT [--color green|yellow|red|cyan|dim] [--session ID]
                        [--cwd DIR] [--ttl SECONDS] [--url URL] [--priority 1-5]
                                   show a label on the second line, e.g. from a hook
@@ -1686,6 +1772,19 @@ def main(argv):
         except ValueError:
             cols = columns()
         print(render(sample(os.getcwd()), cols))
+        return 0
+    if cmd == "codex" and len(rest) == 1:
+        cwd = os.path.realpath(os.path.expanduser(opts.get("cwd") or os.getcwd()))
+        try:
+            session = opts.get("session") or (None if opts.get("cwd") else os.environ.get("CODEX_THREAD_ID"))
+            data = codex_snapshot(cwd, session)
+        except ValueError as error:
+            print(f"promptsill: {error}", file=sys.stderr)
+            return 2
+        print(fit(codex_line(data), columns()))
+        work = fit(work_line(data), columns())
+        if work:
+            print(work)
         return 0
     if cmd:
         print(f"promptsill: unknown command {cmd!r}\n\n{USAGE}", file=sys.stderr)
