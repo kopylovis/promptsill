@@ -8,11 +8,12 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib.parse import quote
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 HOME = os.path.expanduser("~")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "promptsill")
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "promptsill")
@@ -1371,6 +1372,53 @@ def codex_line(d):
                               for key in ("five_hour", "seven_day"))])
 
 
+CODEX_FOOTER = ["model-with-reasoning", "context-remaining", "five-hour-limit", "weekly-limit", "git-branch"]
+
+
+def install_codex_footer(force=False):
+    codex = shutil.which("codex")
+    if not codex:
+        raise OSError("codex is missing from PATH")
+    with subprocess.Popen([codex, "app-server", "--listen", "stdio://"], cwd=HOME,
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          encoding="utf-8") as server:
+        deadline = threading.Timer(5, server.kill)
+        deadline.start()
+        try:
+            def send(message):
+                server.stdin.write(json.dumps(message) + "\n")
+                server.stdin.flush()
+
+            def request(request_id, method, params):
+                send({"id": request_id, "method": method, "params": params})
+                for line in server.stdout:
+                    reply = json.loads(line)
+                    if reply.get("id") == request_id:
+                        if "error" in reply:
+                            raise ValueError(reply["error"].get("message", method))
+                        return reply["result"]
+                raise OSError("Codex App Server closed the connection")
+
+            request(1, "initialize", {"clientInfo": {"name": "promptsill", "version": VERSION}})
+            send({"method": "initialized"})
+            result = request(2, "config/read", {"includeLayers": True})
+            current = result["config"].get("tui", {}).get("status_line")
+            if current is not None and not force:
+                return False
+            params = {"keyPath": "tui.status_line", "value": CODEX_FOOTER, "mergeStrategy": "upsert"}
+            user = next((layer for layer in result.get("layers") or [] if layer["name"]["type"] == "user"), None)
+            if user and user.get("version"):
+                params["expectedVersion"] = user["version"]
+            written = request(3, "config/value/write", params)
+            if written.get("status") != "ok" or written.get("overriddenMetadata"):
+                raise ValueError("Codex could not enable the footer in the active configuration")
+            return True
+        finally:
+            deadline.cancel()
+            if server.poll() is None:
+                server.kill()
+
+
 def sample(cwd):
     now = time.time()
     return {"model": {"display_name": "Opus"}, "effort": {"level": "high"}, "workspace": {"current_dir": cwd},
@@ -1539,6 +1587,8 @@ USAGE = """promptsill for Claude Code and Codex
                                   render sample data for the current folder
   promptsill codex [--cwd DIR] [--session UUID] [--lang en|ru]
                                   show the Codex session and project status in the terminal
+  promptsill codex install [--force]
+                                  configure the live footer in the Codex terminal UI
   promptsill badge set NAME TEXT [--color green|yellow|red|cyan|dim] [--session ID]
                        [--cwd DIR] [--ttl SECONDS] [--url URL] [--priority 1-5]
                                   show a label on the second line, e.g. from a hook
@@ -1772,6 +1822,18 @@ def main(argv):
         except ValueError:
             cols = columns()
         print(render(sample(os.getcwd()), cols))
+        return 0
+    if rest == ["codex", "install"]:
+        try:
+            changed = install_codex_footer(opts.get("force", False))
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            print(f"promptsill: {error}", file=sys.stderr)
+            return 1
+        if OPTS["lang"] == "ru":
+            print("Строка состояния включена для новых сессий Codex." if changed else
+                  "У Codex уже есть настройка строки состояния.")
+        else:
+            print("Enabled the footer for new Codex sessions." if changed else "The Codex footer is already configured.")
         return 0
     if cmd == "codex" and len(rest) == 1:
         cwd = os.path.realpath(os.path.expanduser(opts.get("cwd") or os.getcwd()))

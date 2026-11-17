@@ -1,6 +1,7 @@
 import atexit
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -11,7 +12,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "promptsill")
@@ -40,6 +41,30 @@ def reset_opts(**kw):
 
 
 class Codex(unittest.TestCase):
+    def test_installer_preserves_custom_fields_and_writes_defaults(self):
+        for existing in ([], ["model"], None):
+            with self.subTest(existing=existing):
+                server = MagicMock()
+                server.__enter__.return_value = server
+                server.stdin = io.StringIO()
+                server.stdout = iter(json.dumps(reply) for reply in (
+                    {"id": 1, "result": {}},
+                    {"id": 2, "result": {"config": {"tui": {"status_line": existing}},
+                                         "layers": [{"name": {"type": "user"}, "version": "version"}]}},
+                    {"id": 3, "result": {"status": "ok"}},
+                ))
+                with patch.object(ps.shutil, "which", return_value="/test/codex"), \
+                     patch.object(ps.subprocess, "Popen", return_value=server):
+                    self.assertEqual(ps.install_codex_footer(), existing is None)
+                requests = [json.loads(line) for line in server.stdin.getvalue().splitlines()]
+                writes = [request["params"] for request in requests if request["method"] == "config/value/write"]
+                if existing is None:
+                    self.assertEqual(writes[0]["keyPath"], "tui.status_line")
+                    self.assertEqual(writes[0]["value"], ps.CODEX_FOOTER)
+                    self.assertEqual(writes[0]["expectedVersion"], "version")
+                else:
+                    self.assertEqual(writes, [])
+
     def test_snapshot_uses_requested_session_and_keeps_latest_metrics(self):
         reset_opts()
         sid = "11111111-2222-4333-8444-555555555555"
