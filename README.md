@@ -102,9 +102,13 @@ promptsill --version
 
 ## Codex
 
-Run `promptsill codex install` to enable the live footer in new Codex CLI sessions. It sets the built-in fields for
-the model and reasoning effort, remaining context, five-hour and weekly limits, and Git branch. Existing footer
-settings are preserved. Use `--force` to replace them or `/statusline` inside Codex to edit the fields.
+Run `promptsill codex install` to configure the footer in new Codex CLI sessions. It shows the model and effort,
+context used, the five-hour and weekly limits when available, Git branch and input and output totals. The previous
+promptsill default updates automatically. Use `/statusline` to customize the footer or `--force` to reset it.
+
+Run `promptsill codex watch` in a terminal pane for a two-line view that refreshes every three seconds. It uses
+the same project and machine details as the Claude Code status line. When Codex reports the data, the first line
+also shows cached input from the most recent request and total tokens for the session. Press Ctrl+C to close it.
 
 Run `promptsill codex` for a terminal snapshot. It shows the model, context and rate-limit windows from the local
 Codex session when those fields are available, alongside the usual project and machine status. Inside a Codex
@@ -113,7 +117,7 @@ current folder. Use `--session UUID` to select a session or `--cwd DIR` to look 
 
 The command reads session files under `CODEX_HOME` (by default `~/.codex`). It uses the latest saved metrics and
 makes no network requests. If a session file or its metrics are unavailable, you still get project and machine
-status. Codex's footer uses its built-in fields. The extra machine and project metrics appear in the snapshot.
+status. Codex's footer uses its built-in fields. The terminal view includes the project and machine details.
 
 ## Settings
 
