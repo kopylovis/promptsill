@@ -42,23 +42,23 @@ def reset_opts(**kw):
 
 class Codex(unittest.TestCase):
     def test_installer_preserves_custom_fields_and_writes_defaults(self):
-        for existing in ([], ["model"], None):
-            with self.subTest(existing=existing):
+        for tui in ({"status_line": []}, {"status_line": ["model"]}, None):
+            with self.subTest(tui=tui):
                 server = MagicMock()
                 server.__enter__.return_value = server
                 server.stdin = io.StringIO()
                 server.stdout = iter(json.dumps(reply) for reply in (
                     {"id": 1, "result": {}},
-                    {"id": 2, "result": {"config": {"tui": {"status_line": existing}},
+                    {"id": 2, "result": {"config": {"tui": tui},
                                          "layers": [{"name": {"type": "user"}, "version": "version"}]}},
                     {"id": 3, "result": {"status": "ok"}},
                 ))
                 with patch.object(ps.shutil, "which", return_value="/test/codex"), \
                      patch.object(ps.subprocess, "Popen", return_value=server):
-                    self.assertEqual(ps.install_codex_footer(), existing is None)
+                    self.assertEqual(ps.install_codex_footer(), tui is None)
                 requests = [json.loads(line) for line in server.stdin.getvalue().splitlines()]
                 writes = [request["params"] for request in requests if request["method"] == "config/value/write"]
-                if existing is None:
+                if tui is None:
                     self.assertEqual(writes[0]["keyPath"], "tui.status_line")
                     self.assertEqual(writes[0]["value"], ps.CODEX_FOOTER)
                     self.assertEqual(writes[0]["expectedVersion"], "version")
