@@ -706,6 +706,46 @@ class RemoteControl(unittest.TestCase):
         self.assertEqual(plain(part[2]), "RC")
 
 
+class ContextFile(unittest.TestCase):
+    SID = "4d59f0e6-1162-4626-9484-617dc928fc6e"
+
+    def setUp(self):
+        shutil.rmtree(os.path.join(ps.CACHE, "context"), ignore_errors=True)
+
+    def status(self, size=1000000, used=279000):
+        return {"session_id": self.SID, "model": {"id": "claude-opus-5-5", "display_name": "Opus 5.5"},
+                "context_window": {"used_percentage": 27.9, "context_window_size": size, "total_input_tokens": used}}
+
+    def test_window_lands_in_a_file_per_session(self):
+        ps.remember_context(self.status())
+        with open(ps.context_file(self.SID)) as f:
+            self.assertEqual(json.load(f), {"size": 1000000, "used": 279000, "model": "claude-opus-5-5"})
+
+    def test_same_numbers_do_not_rewrite(self):
+        ps.remember_context(self.status())
+        path = ps.context_file(self.SID)
+        os.utime(path, (1, 1))
+        ps.remember_context(self.status())
+        self.assertEqual(os.path.getmtime(path), 1)
+        ps.remember_context(self.status(used=300000))
+        self.assertGreater(os.path.getmtime(path), 1)
+
+    def test_odd_session_or_no_window_writes_nothing(self):
+        ps.remember_context({"session_id": "../../etc", "context_window": {"context_window_size": 10}})
+        ps.remember_context({"session_id": self.SID})
+        self.assertFalse(os.path.exists(os.path.join(ps.CACHE, "context")))
+
+    def test_prune_drops_old_context_files(self):
+        ps.remember_context(self.status())
+        path = ps.context_file(self.SID)
+        os.utime(path, (1, 1))
+        stamp = os.path.join(ps.CACHE, ".pruned")
+        if os.path.exists(stamp):
+            os.remove(stamp)
+        ps.prune()
+        self.assertFalse(os.path.exists(path))
+
+
 class Proxy(unittest.TestCase):
     NAMES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "PROMPTSILL_PROXY_LABEL",
              "PROMPTSILL_PROXY_DETAIL", "PROMPTSILL_PROXY_URL", "TERM_PROGRAM")
