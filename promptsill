@@ -177,9 +177,12 @@ def prune(age=86400):
         os.makedirs(CACHE, exist_ok=True)
         with open(stamp, "w"):
             pass
-        for entry in os.scandir(CACHE):
-            if entry.is_file() and entry.name != ".pruned" and now - entry.stat().st_mtime > age:
-                os.remove(entry.path)
+        for folder in (CACHE, os.path.join(CACHE, "context")):
+            if not os.path.isdir(folder):
+                continue
+            for entry in os.scandir(folder):
+                if entry.is_file() and entry.name != ".pruned" and now - entry.stat().st_mtime > age:
+                    os.remove(entry.path)
     except OSError:
         pass
 
@@ -1287,8 +1290,37 @@ def columns():
 
 
 def render(d, cols=0):
+    safe(lambda: remember_context(d), None)
     lines = [safe(lambda: fit(make(d), cols), "") for make in (claude_line, work_line)]
     return "\n".join(line for line in lines if line)
+
+
+SESSION_ID = re.compile(r"[A-Za-z0-9_-]{8,80}")
+
+
+def context_file(sid):
+    return os.path.join(CACHE, "context", sid + ".json")
+
+
+def remember_context(d):
+    """The context window as Claude Code reports it, one small file per session in CACHE/context/<session>.json.
+    The window size never reaches the transcript, so a desktop app that shows the session reads it from here.
+    Written only when the numbers change; prune() drops files of sessions closed for a day."""
+    sid = d.get("session_id")
+    cw = obj(d.get("context_window"))
+    size, used = cw.get("context_window_size"), cw.get("total_input_tokens")
+    if not (isinstance(sid, str) and SESSION_ID.fullmatch(sid) and isinstance(size, int) and size > 0):
+        return
+    data = {"size": size, "used": used if isinstance(used, int) else None,
+            "model": obj(d.get("model")).get("id") or obj(d.get("model")).get("display_name")}
+    path = context_file(sid)
+    try:
+        with open(path, encoding="utf-8") as f:
+            if json.load(f) == data:
+                return
+    except (OSError, ValueError):
+        pass
+    write_json(path, data)
 
 
 def codex_rollout(cwd, session):

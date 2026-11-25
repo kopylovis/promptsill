@@ -169,7 +169,7 @@ Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool'
 
 ## Privacy
 
-promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files, Claude Code's list of running sessions and the end of the session transcript, runs `git status`, `lsof`, `ps`, `pmset` and once an hour `claude --version`, and keeps a short cache in `~/.cache/promptsill`. Slow parts of it are refreshed by a detached `promptsill _refresh` process, so drawing the line never waits for them.
+promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files, Claude Code's list of running sessions and the end of the session transcript, runs `git status`, `lsof`, `ps`, `pmset` and once an hour `claude --version`, and keeps a short cache in `~/.cache/promptsill`. The context window of each Claude Code session goes to `~/.cache/promptsill/context/<session id>.json` (`size`, `used`, `model`), because the window size never reaches the transcript; the Agentmeister desktop app reads it from there. Slow parts of it are refreshed by a detached `promptsill _refresh` process, so drawing the line never waits for them.
 
 ## Development
 
