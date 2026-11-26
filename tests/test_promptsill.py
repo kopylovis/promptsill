@@ -748,7 +748,7 @@ class ContextFile(unittest.TestCase):
 
 class Proxy(unittest.TestCase):
     NAMES = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "PROMPTSILL_PROXY_LABEL",
-             "PROMPTSILL_PROXY_DETAIL", "PROMPTSILL_PROXY_URL", "TERM_PROGRAM")
+             "PROMPTSILL_PROXY_DETAIL", "PROMPTSILL_PROXY_URL", "PROMPTSILL_PROXY_FILE", "TERM_PROGRAM")
 
     def setUp(self):
         reset_opts()
@@ -820,6 +820,67 @@ class Proxy(unittest.TestCase):
                 ps.cached = real
         self.assertEqual(plain(part[1]), "proxy KZ down")
         self.assertEqual(part[0], 1)
+
+
+    def write_state(self, text):
+        path = os.path.join(TMP, "proxy-state.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.environ["PROMPTSILL_PROXY_FILE"] = path
+        return path
+
+    def test_file_overrides_env(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        os.environ["PROMPTSILL_PROXY_DETAIL"] = "vless 203.0.113.7"
+        reset_opts(links=False)
+        self.write_state(json.dumps({"label": "test SE", "detail": "hysteria2 198.51.100.4"}))
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy test SE hysteria2 198.51.100.4")
+        self.write_state(json.dumps({"label": "test SE", "detail": None}))
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy test SE vless 203.0.113.7")
+        self.write_state(json.dumps({"detail": ""}))
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+
+    def test_missing_or_invalid_file_falls_back_to_env(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        for text in ("{not json", "[1, 2]", '"SE"', ""):
+            with self.subTest(text=text):
+                self.write_state(text)
+                self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+        os.environ["PROMPTSILL_PROXY_FILE"] = os.path.join(TMP, "no-such-proxy-state.json")
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+        os.environ["PROMPTSILL_PROXY_FILE"] = TMP
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+
+    def test_relative_file_is_ignored(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        path = self.write_state(json.dumps({"label": "SE", "closed": True}))
+        os.environ["PROMPTSILL_PROXY_FILE"] = os.path.relpath(path)
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy KZ")
+
+    def test_file_values_are_sanitized(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        reset_opts(links=False)
+        self.write_state(json.dumps({"label": "SE\x1b[31m" + "x" * 30, "detail": "vless\x1b]8;;x 198.51.100.4" + "y" * 40}))
+        part = ps.proxy_part()
+        self.assertEqual(plain(part[1]), "proxy SE31m" + "x" * 15 + " vless8x 198.51.100.4" + "y" * 20)
+        self.assertNotIn("]8;;", part[1])
+
+    def test_closed(self):
+        os.environ["HTTPS_PROXY"] = "http://corp.example:8080"
+        os.environ["PROMPTSILL_PROXY_LABEL"] = "KZ"
+        self.write_state(json.dumps({"label": "test", "closed": True}))
+        part = ps.proxy_part()
+        self.assertEqual(plain(part[1]), "proxy test closed")
+        self.assertIn(ESC + "[31m", part[1])
+        self.assertEqual(part[0], 1)
+        reset_opts(lang="ru")
+        self.assertEqual(plain(ps.proxy_part()[1]), "прокси test закрыт")
+        reset_opts()
+        self.write_state(json.dumps({"label": "test", "closed": "yes"}))
+        self.assertEqual(plain(ps.proxy_part()[1]), "proxy test")
 
 
 class OtherSessions(unittest.TestCase):
