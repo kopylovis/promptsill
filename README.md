@@ -13,16 +13,16 @@ checkout-redesign ↑2 ±3 · approved · memory 9.4/16 GB
 
 ## What it shows that others don't
 
-The second line is about the project you're in and the machine it runs on. Apart from the branch, each part appears only when it has something to say:
+The second line is about the project you're in and the machine it runs on. Apart from the branch and, on macOS, memory, each part appears only when it has something to say:
 
 - **Git branch** with commits ahead and behind, `not pushed` and the number of changed files. It's clickable: it opens the pull request when one is open, otherwise the branch page. Next to it, `approved` or `changes requested` once the pull request has a review, and `worktree` when the session runs in a linked git worktree.
 - **Unfinished git operations.** `rebasing 3/7, conflicts 2` in the middle of a rebase, and likewise `merging`, `cherry-picking`, `reverting` or `bisecting`. During a rebase the branch shows its own name instead of `(detached)`.
 - **Your dev servers.** `vite :5173` when this project's server is running, clickable to open it in the browser.
 - **Busy ports.** `:3000 taken: api` when the port your project needs is held by another folder's server.
 - **Node version.** `node 20, need 22 (.nvmrc)` when the active `node` doesn't match `.nvmrc`, `.node-version` or `engines`.
-- **Memory pressure** on macOS. Used memory and swap, yellow or red when free memory runs low or swap grows.
-- **Gradle and Kotlin daemons**, counted separately, with the RAM they hold together: `Gradle 2 + Kotlin 1 (1.9 GB)`. Shown in JVM and Android projects, or anywhere when memory is tight or the daemons hold 1.5 GB or more.
-- **iOS simulators and the Android emulator** in mobile projects, so you notice the ones you forgot to close.
+- **Memory** on macOS. Used and total memory, plus swap once it reaches 0.5 GB. Yellow under 2 GB free or over 3 GB of swap, red under 1 GB free or over 6 GB of swap.
+- **Gradle and Kotlin daemons**, counted separately, with the RAM they hold together: `Gradle 2 + Kotlin 1 (1.9 GB)`. Shown in JVM and mobile projects, or anywhere when memory is tight or the daemons hold 1.5 GB or more.
+- **iOS simulators and the Android emulator** in mobile projects, or anywhere when memory is tight, so you notice the ones you forgot to close.
 - **A slowed-down Mac.** `CPU slowed to 70%` when macOS throttles the CPU, `overheating` on a thermal warning, `low power mode`, and `battery 15%` when the battery is at 20% or less and not charging. A build that suddenly takes twice as long usually has one of these behind it.
 - **Low disk space.** `disk 12.0 GB free` once less than 15 GB is left on the home volume, red under 5 GB. Xcode's DerivedData, simulators and Gradle caches eat it quietly.
 - **A huge session file**, from 50 MB up.
@@ -40,13 +40,13 @@ The first line is about Claude Code itself.
 - **Prompt cache timer.** `cache 44s` shortly before the cache expires, and `cache expired (184k tokens)` after it has. The next message after expiry re-reads the whole conversation, here 184k tokens, which costs more of your limit; from 100k up it turns yellow. When the cache was rebuilt for another reason, promptsill says why for five minutes: `cache reset: tools changed`, `system prompt changed`, `model changed`, `history rewritten` or `server side`.
 - **Remote Control.** `remote control` while the session is reachable from claude.ai or the Claude app, clickable to open it there. Claude Code doesn't pass this to status lines, so promptsill reads it from Claude Code's own session files in `~/.claude/sessions/`. That's an internal format; if a future version changes it, the label just stops appearing.
 - **Proxy.** `proxy KZ` when the session's network goes through a proxy (`HTTPS_PROXY` or `ALL_PROXY` in the environment Claude Code runs with), red `proxy KZ down` when a proxy on this machine stops answering. The country comes from `PROMPTSILL_PROXY_LABEL`, which the tool that starts the proxy sets after checking the exit; promptsill itself makes no requests to find it out. Without the variable it just says `proxy`. `PROMPTSILL_PROXY_DETAIL` (say `vless 203.0.113.7`) and `PROMPTSILL_PROXY_URL` (an `http(s)://` or `file://` page about the exit) are optional. In a terminal that can click links the label links to that page and the detail stays off the line; in macOS Terminal, with `links` off or without a URL, the detail goes right after the label. When the label can change during a session, say the proxy switches subscriptions or a watcher shuts it down, point `PROMPTSILL_PROXY_FILE` at a JSON file such as `{"label": "SE", "detail": "hysteria2 198.51.100.4", "closed": false}`. promptsill reads it on every redraw; its `label` and `detail` replace the variables, a missing key keeps the variable's value, and `"closed": true` turns the part red: `proxy SE closed`. The path must be absolute. A missing or broken file is ignored and the variables apply.
-- **Cache health.** `cache hits 72%, 2 misses` once cache reads drop under 80% of the input or three requests have missed, yellow, red under 50%. A cache that keeps missing burns the limit with nothing else on screen.
+- **Cache health.** `cache hits 72%, 2 misses` after five requests, once cache reads drop under 80% of the input or three requests have missed, yellow, red under 50%. A cache that keeps missing burns the limit with nothing else on screen.
 - **What Claude is doing.** `todo 1/3: Running tests` while a TodoWrite list is open, and the tool call still waiting for its result, dimmed: `Bash: Run the test suite`, `Edit: app.py`, `github: create_pull_request`. promptsill reads the last 512 KB of the transcript for this.
 - **A newer Claude Code.** `2.1.300 installed, restart` when `claude --version` is newer than the version the session runs. The check runs in the background once an hour, never while the line is drawn.
 - **Lines and time.** `+156 −23` lines changed and how long the session has run, `2h 15m`. The first to go on a narrow terminal.
 - **Your other sessions.** `kcalm waits for you` when another Claude Code session on this machine is stuck on a permission prompt or a question, and `authmeister done` for ten minutes after one finishes its turn. Three or more are counted: `3 sessions wait for you`. This also comes from `~/.claude/sessions/`.
 
-When the terminal is narrow, the session name, finished sessions, the running tool and the lines and time go first. Then the other parts are shortened, and only after that are the least important dropped. The limits, context and branch stay. CJK characters and emoji count as two columns.
+When the terminal is narrow, the session name, finished sessions, the running tool and the lines and time go first. Then the other parts are shortened, and only after that are the least important dropped. The context, the 5-hour limit, any limit in yellow or red and the branch stay; an uncolored weekly or spend limit can be dropped. CJK characters and emoji count as two columns.
 
 ## Subagent rows
 
@@ -80,12 +80,13 @@ The plugin keeps its copy of promptsill up to date on every session start. Run `
 ### By hand
 
 ```bash
+mkdir -p ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/kopylovis/promptsill/main/promptsill -o ~/.local/bin/promptsill
 chmod +x ~/.local/bin/promptsill
 promptsill install
 ```
 
-promptsill is a single Python file with no dependencies. It needs `python3` 3.9 or newer, and uses `git`, `lsof`, `ps` and, on macOS, `pmset` when they're available. The cache timer needs Claude Code 2.1.251 or newer; everything else works with older versions.
+promptsill is a single Python file with no dependencies. It needs `python3` 3.9 or newer, and uses `git`, `lsof`, `ps`, `node` and, on macOS, `vm_stat`, `sysctl` and `pmset` when they're available. The cache timer needs Claude Code 2.1.251 or newer; everything else works with older versions.
 
 ## Commands
 
@@ -94,11 +95,14 @@ promptsill install [--force] [--lang en|ru]   add the statusLine to ~/.claude/se
 promptsill uninstall                          remove it, and bring back the one it replaced
 promptsill preview [--lang en|ru] [--width N] render sample data for the current folder
 promptsill subagents [--lang en|ru]           rows for the agent panel, set up by install
+promptsill codex [watch] [--cwd DIR] [--session UUID]
+                                              Codex session and project status, see below
+promptsill codex install [--force]            set up the footer in Codex
 promptsill badge set|clear|list ...           labels from hooks and scripts, see below
 promptsill --version
 ```
 
-`install` never replaces another status line unless you pass `--force`. When you do, the old one is saved and `uninstall` restores it. Before every change, `settings.json` is copied to `settings.json.promptsill-backup`. `CLAUDE_CONFIG_DIR` is respected.
+`install` never replaces another status line unless you pass `--force`. When you do, the old one is saved and `uninstall` restores it. Before every change, `settings.json` is copied to `settings.json.promptsill-backup`. `CLAUDE_CONFIG_DIR` is respected, and `--settings FILE` points `install` and `uninstall` at another settings file.
 
 ## Codex
 
@@ -110,10 +114,10 @@ Run `promptsill codex watch` in a terminal pane for a two-line view that refresh
 the same project and machine details as the Claude Code status line. When Codex reports the data, the first line
 also shows cached input from the most recent request and total tokens for the session. Press Ctrl+C to close it.
 
-Run `promptsill codex` for a terminal snapshot. It shows the model, context and rate-limit windows from the local
-Codex session when those fields are available, alongside the usual project and machine status. Inside a Codex
-session it uses `CODEX_THREAD_ID` when available. Otherwise it picks the most recently updated session in the
-current folder. Use `--session UUID` to select a session or `--cwd DIR` to look in another folder.
+Run `promptsill codex` for a terminal snapshot. It shows the model, proxy, context and rate-limit windows from the
+local Codex session when those fields are available, alongside the usual project and machine status. Inside a Codex
+session it uses `CODEX_THREAD_ID` unless you pass `--cwd`. Otherwise it picks the most recently updated session in
+the current folder. Use `--session UUID` to select a session or `--cwd DIR` to look in another folder.
 
 The command reads session files under `CODEX_HOME` (by default `~/.codex`). It uses the latest saved metrics and
 makes no network requests. If a session file or its metrics are unavailable, you still get project and machine
@@ -135,7 +139,7 @@ Optional `~/.config/promptsill/config.json`:
 }
 ```
 
-- `links`: clickable links on the branch, review state, dev servers, Remote Control and badges ([OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda); iTerm2, Kitty, WezTerm, Ghostty and others, usually with Cmd-click or Ctrl-click; macOS Terminal doesn't support them).
+- `links`: clickable links on the branch, review state, dev servers, Remote Control, the proxy label and badges ([OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda); iTerm2, Kitty, WezTerm, Ghostty and others, usually with Cmd-click or Ctrl-click; macOS Terminal doesn't support them).
 - `color`: `false` turns colors off; so does the `NO_COLOR` environment variable.
 - `ascii`: `[##---]` bars for fonts without block characters; also `PROMPTSILL_ASCII=1`.
 - `session_name`: `false` hides the session name. Claude Code titles a session in the language you write in, so with English labels and a Russian conversation the title is Russian.
@@ -165,11 +169,11 @@ promptsill badge clear build-mode
 promptsill badge list
 ```
 
-Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool's name so they don't clash. promptsill shows at most 8 badges and strips control characters from the text.
+Names may contain letters, digits, `.`, `_` and `-`. Prefix them with your tool's name so they don't clash. promptsill shows at most 8 badges, strips control characters from the text and cuts it at 40 characters.
 
 ## Privacy
 
-promptsill runs locally and makes no network requests. It reads the JSON Claude Code sends it, the badge files, Claude Code's list of running sessions and the end of the session transcript, runs `git status`, `lsof`, `ps`, `pmset` and once an hour `claude --version`, and keeps a short cache in `~/.cache/promptsill`. The context window of each Claude Code session goes to `~/.cache/promptsill/context/<session id>.json` (`size`, `used`, `model`), because the window size never reaches the transcript; the Agentmeister desktop app reads it from there. Slow parts of it are refreshed by a detached `promptsill _refresh` process, so drawing the line never waits for them.
+promptsill runs locally and makes no network requests; the only connection it opens is to a proxy port on this machine, to see whether the proxy answers. It reads the JSON Claude Code sends it, the badge files, the file in `PROMPTSILL_PROXY_FILE`, Claude Code's list of running sessions, the end of the session transcript and, for `promptsill codex`, Codex's session files. It runs `git`, `lsof`, `ps`, `node --version`, `vm_stat`, `sysctl`, `pmset` and once an hour `claude --version`, and keeps a short cache in `~/.cache/promptsill`. The context window of each Claude Code session goes to `~/.cache/promptsill/context/<session id>.json` (`size`, `used`, `model`), because the window size never reaches the transcript; the Agentmeister desktop app reads it from there. Slow parts of it are refreshed by a detached `promptsill _refresh` process, so drawing the line never waits for them.
 
 ## Development
 
