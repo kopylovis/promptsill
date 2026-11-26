@@ -98,7 +98,7 @@ def scene_lines(scene, lang):
     saved = {name: getattr(ps, name) for name in ("cached", "git_op", "badges", "transcript_activity", "peek")}
     saved_env = {k: os.environ.pop(k, None) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy",
                                                        "PROMPTSILL_PROXY_LABEL", "PROMPTSILL_PROXY_DETAIL",
-                                                       "PROMPTSILL_PROXY_URL")}
+                                                       "PROMPTSILL_PROXY_URL", "PROMPTSILL_PROXY_FILE")}
     if scene.get("proxy"):
         os.environ.update(HTTPS_PROXY="http://127.0.0.1:7890", PROMPTSILL_PROXY_LABEL=scene["proxy"])
     ps.cached = lambda name, ttl, fn, background=False: demo[name.split("-")[0]]
